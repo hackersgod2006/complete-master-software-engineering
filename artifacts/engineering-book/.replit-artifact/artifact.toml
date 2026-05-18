@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "The Complete Master of Software Engineering"
+version = "1.0.0"
+id = "artifacts/engineering-book"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20542
+
+[services.development]
+run = "pnpm --filter @workspace/engineering-book run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/engineering-book", "run", "build" ]
+publicDir = "artifacts/engineering-book/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20542"
+BASE_PATH = "/"
