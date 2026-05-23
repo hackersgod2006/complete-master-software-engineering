@@ -5,202 +5,468 @@ export const CH13_SECTIONS: Section[] = [
     id: "13-1",
     number: "13.1",
     title: "Defining Legacy Code: Any Code Without Tests",
-    content: `Most developers think of **Legacy Code** as "old code" or "code written by someone who has since left the company." However, Michael Feathers, in his classic *Working Effectively with Legacy Code*, provides a much more functional and chilling definition: **Legacy Code is code without tests.**
+    content: `Legacy code is not old code. It is not badly written code. It is code without tests. This definition is precise and actionable: code without tests is code you cannot safely change, because you have no automated way to know whether your change broke something. Old code with tests is not legacy. New code without tests is legacy from the moment it is written.
+Most of the code in the world is legacy code. Most of the code you will encounter in your career is legacy code. The engineers who can work effectively with legacy code — who can add features without breaking things, who can improve the design without a complete rewrite, who can gradually build a test suite around untested systems — are among the most valuable engineers in any organization. This chapter teaches that skill completely.
 
-## The Vicious Cycle of Legacy Code
-Code without tests is difficult to change. Because it's difficult to change, developers are afraid to touch it. Because they are afraid, they only add the bare minimum of code required to fix a bug or add a feature, usually by "tacking on" logic rather than integrating it. This makes the code even more complex and harder to test, and the cycle continues.
 
-## Why Tests Define Legacy
-Tests are the **safety net** that allows you to change code with confidence. Without them, you can never be certain that a change in one part of the system didn't break a seemingly unrelated part. In a large system, the dependencies are so complex that manual regression testing is impossible.
-- **With Tests**: You can refactor, clean, and evolve the design. The code remains "living."
-- **Without Tests**: The code is "frozen." Any change is a risk. You are essentially gambling with the system's stability.
-
-## The Reality of Industry
-You will spend 80% of your career working with legacy code. Green-field projects (starting from scratch) are rare. Your value as a Master of Software Engineering is not measured by how well you write new code, but by how well you can **tame and transform** existing, messy, untested code into a maintainable system.
-
----
-**Key Insight**: Legacy code isn't a status based on age; it's a status based on **testability**. A project started yesterday that has no tests is already legacy code.`
+---`
   },
   {
     id: "13-2",
     number: "13.2",
     title: "The Legacy Code Change Algorithm",
-    content: `When you are assigned to change legacy code, the instinct is often to "just dive in." This is a recipe for disaster. Feathers outlines a disciplined algorithm for changing legacy code that minimizes risk:
+    content: `Reading unfamiliar code is a skill with a method. Engineers who approach it randomly spend hours without building a coherent mental model. Engineers with a systematic approach build accurate models in minutes.
 
-1. **Identify Change Points**: Find where in the code you need to make your change.
-2. **Find Test Points**: Find where you can place tests to verify the behavior of those change points.
-3. **Break Dependencies**: Often, you can't get the code under test because it depends on something else (a database, a complex object, a global variable). You must break these dependencies.
-4. **Write Tests**: Write **Characterization Tests** (see 13.5) to capture the current behavior.
-5. **Make Changes and Refactor**: Now that you have a safety net, you can make your intended change and then refactor the code to improve its design.
+\`\`\`python
+# SYSTEMATIC CODE READING: the method
 
-## The "Surgical" Mentality
-Working with legacy code is like surgery. You want to make the smallest possible incision to achieve the goal. You don't perform a heart transplant when a simple stent will do. However, unlike a surgeon, your goal is to leave the "patient" (the codebase) healthier and more resilient than you found it.
+# STEP 1: Start at the entry point
+# For a web app: find the URL routing (urls.py, routes.js, main.go)
+# For a CLI tool: find main() or __main__
+# For a library: find the public API (what users import)
+# For a service: find where it receives requests
 
-## The Compromise
-In the legacy world, you often have to write "ugly" code (like subclassing and overriding) just to get the code under test. This is an acceptable trade-off. Once the tests are in place, you can use refactoring to clean up the mess. The tests are your ticket to freedom.`
+# STEP 2: Read tests first
+# Tests are executable documentation
+# They show: what the code is SUPPOSED to do, not what it does
+# Read test names: they describe the behavior
+# Read test bodies: they show how to use the code
+# Missing tests: the system is legacy (proceed to characterization tests)
+
+# STEP 3: Sketch the data flow
+# On paper: draw the main data transformations
+# Input -> Transform A -> Transform B -> Output
+# What is the main data structure? Where is it created? Where consumed?
+
+# STEP 4: Find the seams
+# A seam is a place where you can change behavior without editing code
+# Seams: function parameters, interface implementations, configuration files
+# Seams are where tests can be inserted (more on this below)
+
+# STEP 5: Use git log for historical context
+# git log --oneline --follow path/to/file (history of one file)
+# git blame path/to/file (who wrote each line, when, in which commit)
+# git show COMMIT_HASH (what changed in a specific commit)
+# The commit messages explain WHY — more valuable than the code itself
+
+# STEP 6: Run the code with instrumentation
+# Add print statements or a debugger to trace actual execution
+# Log the inputs and outputs of key functions
+# Confirm your mental model against reality
+
+# TOOLS FOR UNDERSTANDING LARGE CODEBASES:
+# grep -r 'function_name' . -- find all usages
+# grep -rn 'class ClassName' . -- find class definition and all references
+# find . -name '*.py' | xargs grep 'import_name' -- find what imports what
+# python -m py_compile file.py -- check syntax without running
+# pyflakes file.py -- find undefined names
+\`\`\``
   },
   {
     id: "13-3",
     number: "13.3",
     title: "Finding Seams: Where to Break Dependencies",
-    content: `The biggest obstacle to testing legacy code is **Dependency**. If a function directly creates a database connection or calls a global singleton, you cannot test it in isolation. To break these dependencies, you must find a **Seam**.
+    content: `Before changing legacy code, write characterization tests. A characterization test does not verify what the code SHOULD do — it verifies what the code CURRENTLY does. The purpose: create a safety net that detects any behavioral change, whether intentional or accidental, when you modify the code.
 
-## What is a Seam?
-A **Seam** is a place where you can alter behavior in your program without editing in that place. It's a point of flexibility that you can exploit to insert a "test double" (a mock or stub) instead of the real dependency.
+\`\`\`python
+# WRITING CHARACTERIZATION TESTS
 
-## Identifying Seams
-Look for where different modules or layers meet.
-- **Function Calls**: Can you intercept the call?
-- **Object Creation**: Can you change which object is created?
-- **Global Variables**: Can you replace the global instance?
+# You have found this function in a legacy codebase:
+def compute_price(quantity, unit_price, customer_type, day_of_week):
+price = quantity * unit_price
+if customer_type == 'premium':
+price = price * 0.85
+if customer_type == 'wholesale' and quantity > 100:
+price = price * 0.70
+if day_of_week in [5, 6]: # weekend
+price = price * 1.10
+if customer_type == 'premium' and day_of_week in [5, 6]:
+price = price * 0.95 # further discount for premium on weekends?
+return round(price, 2)
 
-## The Goal: Isolation
-By exploiting a seam, you isolate the code you want to test from its "noisy" neighbors.
-- **Neighbor**: A database that takes 2 seconds to respond.
-- **Seam**: An interface for the data access layer.
-- **Test Double**: A mock that returns a hardcoded list of users in 1 millisecond.
+# You do not know if this is correct. But you must change it.
+# Write characterization tests: capture what it DOES, not what it SHOULD.
 
-The art of legacy code is the art of finding and creating seams where none were intended by the original author.`
+import pytest
+
+class TestComputePriceCharacterization:
+# Each test: run the function, observe output, write assertion
+# Label as characterization so future engineers know these
+# test OBSERVED behavior, not SPECIFIED behavior
+
+def test_standard_customer_weekday(self):
+# CHARACTERIZATION: observed 100.0 for these inputs
+assert compute_price(10, 10.0, 'standard', 1) == 100.0
+
+def test_premium_customer_weekday(self):
+# CHARACTERIZATION: 15% discount applied = 85.0
+assert compute_price(10, 10.0, 'premium', 1) == 85.0
+
+def test_standard_customer_weekend(self):
+# CHARACTERIZATION: 10% surcharge on weekends
+assert compute_price(10, 10.0, 'standard', 6) == 110.0
+
+def test_premium_customer_weekend(self):
+# CHARACTERIZATION: 15% discount then 10% surcharge then 5% discount
+# observed value: 88.65 (chain of multiplications)
+result = compute_price(10, 10.0, 'premium', 6)
+assert result == 88.65
+
+def test_wholesale_over_threshold(self):
+assert compute_price(101, 10.0, 'wholesale', 1) == 707.0
+
+def test_wholesale_under_threshold(self):
+assert compute_price(100, 10.0, 'wholesale', 1) == 1000.0
+
+# NOW you can safely change compute_price.
+# Any unintended behavioral change immediately fails a test.
+# You can also add SPECIFICATION tests that verify what SHOULD happen.
+
+# IMPORTANT: characterization tests may capture BUGS.
+# If you discover the weekend surcharge is wrong:
+# 1. Fix the bug
+# 2. Update the characterization test to match the correct behavior
+# 3. Document in the commit message that this was a bug fix
+\`\`\``
   },
   {
     id: "13-4",
     number: "13.4",
     title: "Seam Types: Object, Link, Preprocessing",
-    content: `There are three primary types of seams, depending on how the language and build system handle code.
+    content: `Legacy code is hard to test because it has hidden dependencies — it creates its own collaborators (databases, HTTP clients, file systems) instead of receiving them. The seam technique finds places to break these dependencies without changing production behavior, making testing possible.
 
-## 1. Object Seams
-This is the most common seam in Object-Oriented languages (Java, C#, Python, TS). It relies on **Polymorphism**. If a method calls another method on an object, you can replace that object with a subclass or an implementation of the same interface that behaves differently for tests.
+\`\`\`python
+# BEFORE: untestable — creates its own dependencies
+import smtplib, sqlite3, datetime
 
-\`\`\`typescript
-// The code we want to test
-class OrderProcessor {
-  process(order) {
-    const validator = new CreditValidator(); // Hard dependency!
-    if (validator.isValid(order)) { /* ... */ }
-  }
-}
-\`\`\`
-To create an object seam, we might use Dependency Injection (passing the validator in) or the "Extract and Override" technique (see 13.8).
+def send_overdue_reminders():
+# Creates its own database connection
+conn = sqlite3.connect('/var/lib/app/production.db')
+cursor = conn.cursor()
 
-## 2. Link Seams
-Link seams occur at the boundary of the build system. You replace a whole library or file with a different version during the linking/importing phase.
-- **Example**: In C/C++, you might link against a "mock_network.o" instead of the real "network.o" during test compilation.
-- **Example**: In JavaScript, using a tool like \`proxyquire\` or Vitest's \`vi.mock()\` to redirect an \`import\` to a mock file.
-
-## 3. Preprocessing Seams
-These are common in languages with preprocessors like C/C++. You use macros to swap out code.
-\`\`\`c
-#ifdef TESTING
-  #define DB_CONNECT mock_db_connect
-#else
-  #define DB_CONNECT real_db_connect
-#endif
+# Creates its own SMTP client
+smtp = smtplib.SMTP('smtp.gmail.com', 587)
 \`\`\`
 
----
-**Choosing a Seam**: Always prefer **Object Seams** if possible, as they are the most explicit and easiest to maintain within the code. Link and Preprocessing seams are "magic" and can make the build process opaque and confusing.`
+smtp.starttls()
+smtp.login('app@company.com', 'hardcoded_password_terrible')
+
+
+\`\`\`python
+# Uses system time directly
+today = datetime.date.today()
+overdue = cursor.execute(
+\`\`\`
+
+'SELECT * FROM invoices WHERE due_date < ? AND paid = 0',
+(today,)
+).fetchall()
+
+
+\`\`\`python
+for invoice in overdue:
+\`\`\`
+
+smtp.sendmail('app@company.com', invoice['email'],
+f'Invoice {invoice["id"]} is overdue')
+smtp.quit()
+conn.close()
+
+
+\`\`\`python
+# PROBLEMS: cannot test without hitting production database,
+# cannot test without sending real emails, cannot control 'today'
+
+# TECHNIQUE 1: EXTRACT AND OVERRIDE
+# Extract dependencies into overridable methods
+class OverdueReminderService:
+def get_overdue_invoices(self, as_of_date): # seam: overridable
+conn = sqlite3.connect('/var/lib/app/production.db')
+return conn.execute(
+\`\`\`
+
+'SELECT * FROM invoices WHERE due_date < ? AND paid = 0',
+(as_of_date,)
+).fetchall()
+
+
+\`\`\`python
+def send_reminder(self, invoice): # seam: overridable
+smtp = smtplib.SMTP('smtp.gmail.com', 587)
+\`\`\`
+
+smtp.sendmail('app@company.com', invoice['email'], f'Invoice overdue')
+smtp.quit()
+
+
+\`\`\`python
+def get_today(self): # seam: overridable for testing
+return datetime.date.today()
+
+def run(self):
+today = self.get_today()
+for invoice in self.get_overdue_invoices(today):
+\`\`\`
+
+self.send_reminder(invoice)
+
+
+\`\`\`python
+# TEST: subclass and override the seams
+class TestableReminderService(OverdueReminderService):
+def __init__(self, fake_invoices, fake_date):
+\`\`\`
+
+self.fake_invoices = fake_invoices
+self.fake_date = fake_date
+self.reminders_sent = []
+
+
+\`\`\`python
+def get_overdue_invoices(self, as_of_date):
+return self.fake_invoices # no database
+
+def send_reminder(self, invoice):
+\`\`\`
+
+self.reminders_sent.append(invoice) # no email
+
+
+\`\`\`python
+def get_today(self):
+return self.fake_date # controlled date
+
+def test_sends_reminder_for_overdue_invoice():
+fake_invoice = {'id': 1, 'email': 'client@example.com', 'due_date': '2024-01-01'}
+service = TestableReminderService(
+fake_invoices=[fake_invoice],
+fake_date=datetime.date(2024, 1, 15)
+\`\`\`
+
+)
+service.run()
+
+\`\`\`python
+assert len(service.reminders_sent) == 1
+assert service.reminders_sent[0]['id'] == 1
+
+# TECHNIQUE 2: DEPENDENCY INJECTION (preferred for new code)
+class OverdueReminderServiceV2:
+def __init__(self, invoice_repo, email_client, clock):
+\`\`\`
+
+self.invoices = invoice_repo # injected
+self.email = email_client # injected
+self.clock = clock # injected
+
+
+\`\`\`python
+def run(self):
+today = self.clock.today()
+for invoice in self.invoices.get_overdue(as_of=today):
+\`\`\`
+
+self.email.send_reminder(invoice)`
   },
   {
     id: "13-5",
     number: "13.5",
     title: "Characterization Tests: Documenting What Code Does",
-    content: `When you first encounter a piece of legacy code, you often don't know what it's *supposed* to do. You only know what it *actually* does. **Characterization Tests** (also called "Golden Master" tests) are written to capture that actual behavior.
+    content: `The Strangler Fig pattern (named after the strangler fig tree that grows around a host tree and eventually replaces it) is the most reliable strategy for replacing a legacy system without a risky big-bang rewrite. You build the new system alongside the old one, gradually rerouting functionality until the old system is no longer used and can be removed.
 
-## How to Write Characterization Tests
-1. Call the piece of code with a set of inputs.
-2. Observe the output (or the side effects in the DB/File system).
-3. Write a test assertion that expects exactly that output, even if it looks wrong!
-4. Repeat with different inputs until you have covered the major logic paths.
+\`\`\`python
+# THE STRANGLER FIG PATTERN: replace legacy incrementally
 
-## Why capture "wrong" behavior?
-The goal of a characterization test is to ensure that your changes don't **accidentally** change behavior. If the code has a bug where it calculates tax at 5.01% instead of 5%, you must capture that 5.01%. If you "fix" it to 5% while refactoring, you might break a downstream system that expects (and has compensated for) that extra 0.01%.
+# PHASE 1: Intercept — add a routing layer between callers and legacy
+class PaymentRouter:
+\`\`\`
 
-## The Workflow
-- **Step 1**: Write 10 characterization tests. All pass.
-- **Step 2**: Perform your refactoring.
-- **Step 3**: Run the tests. If they fail, you broke something.
-- **Step 4**: Once refactoring is done and tests still pass, you can then decide to fix the 5.01% bug. Change the test to expect 5%, watch it fail, then change the code to make it pass.
+'''Routes payment calls to legacy or new system based on configuration.'''
 
-Characterization tests turn "the way the code works today" into a formal contract that protects you from regressions.`
+\`\`\`python
+def __init__(self, legacy_service, new_service, feature_flags):
+\`\`\`
+
+self.legacy = legacy_service
+self.new = new_service
+self.flags = feature_flags
+
+
+\`\`\`python
+def charge(self, customer_id: int, amount_cents: int) -> dict:
+if self.flags.is_enabled('new_payment_service', user_id=customer_id):
+return self.new.charge(customer_id, amount_cents)
+else:
+return self.legacy.charge(customer_id, amount_cents)
+
+# PHASE 2: Build the new service alongside legacy (both active)
+# Deploy with feature flag OFF — all traffic goes to legacy
+# Gradually increase rollout: 1%, 5%, 20%, 50%, 100%
+# Monitor metrics at each step: error rate, latency, business metrics
+# Roll back instantly if metrics degrade (change feature flag)
+
+# PHASE 3: When new service handles 100% of traffic and is stable
+# Remove legacy code
+# Remove the routing layer
+# Clean up feature flags
+
+# PARALLEL RUN: run both systems and compare results
+class ParallelPaymentService:
+\`\`\`
+
+'''Runs both systems, returns new result, logs differences.'''
+
+\`\`\`python
+def __init__(self, legacy, new, metrics):
+\`\`\`
+
+self.legacy = legacy
+self.new = new
+self.metrics = metrics
+
+
+\`\`\`python
+def charge(self, customer_id: int, amount_cents: int) -> dict:
+legacy_result = self.legacy.charge(customer_id, amount_cents)
+try:
+new_result = self.new.charge(customer_id, amount_cents)
+if legacy_result != new_result:
+\`\`\`
+
+self.metrics.log_divergence(
+'payment_charge',
+{'customer_id': customer_id, 'amount': amount_cents},
+legacy_result,
+new_result
+)
+
+\`\`\`python
+except Exception as e:
+\`\`\`
+
+self.metrics.log_new_service_error('payment_charge', e)
+
+\`\`\`python
+return legacy_result # always return legacy result during parallel run
+
+# Parallel run reveals differences before you trust the new system
+# All divergences logged — investigate and fix before cutover
+# Zero risk: always returns legacy result until you are confident
+
+# WHEN NOT TO USE STRANGLER FIG:
+# When the legacy system cannot be intercepted at a clean boundary
+# When the legacy system has no callers you control
+# When business requires an immediate cutover (rare, risky)
+\`\`\``
   },
   {
     id: "13-6",
     number: "13.6",
     title: "Breaking Dependencies: Dependency Injection Techniques",
-    content: `Dependency Injection (DI) is the primary tool for creating seams. In legacy code, you often find "Hard-Coded Dependencies" where a class creates its own helpers.
+    content: `\`\`\`python
+# SPROUT METHOD: add new behavior without touching legacy code
+# Use when: you need to add behavior to a function you cannot safely change
 
-## Hard-Coded Dependency (The Problem)
-\`\`\`python
-class UserService:
-    def __init__(self):
-        self.db = Database("prod-url") # Impossible to test without a real DB
+# LEGACY CODE (do not touch — no tests, too risky):
+def generate_invoice(order_id, customer_id):
+# ... 200 lines of complex, untested invoice generation ...
+# ... we dare not modify this ...
+return invoice_data
+
+# REQUIREMENT: add PDF attachment to invoice emails
+
+# BAD: modify the legacy function (risky without tests)
+# GOOD: sprout a new function and call it alongside the old one
+
+def generate_invoice_pdf(invoice_data: dict) -> bytes:
 \`\`\`
 
-## 1. Constructor Injection
-The most robust method. Pass the dependency as an argument to the constructor.
+'''
+New function — fully tested, clean code.
+Takes the output of generate_invoice and creates a PDF.
+'''
+
 \`\`\`python
-class UserService:
-    def __init__(self, db):
-        self.db = db
+from reportlab.pdfgen import canvas
+# ... clean, tested PDF generation ...
+return pdf_bytes
+
+# Call both: legacy + sprout
+def send_invoice_email(order_id: int, customer_id: int) -> None:
+invoice_data = generate_invoice(order_id, customer_id) # legacy: untouched
+pdf = generate_invoice_pdf(invoice_data) # sprout: fully tested
 \`\`\`
 
-## 2. Setter Injection
-Useful if you cannot change the constructor (e.g., due to a framework or many existing callers).
+email_service.send_with_attachment(
+
 \`\`\`python
-class UserService:
-    def set_db(self, db):
-        self.db = db
+to=invoice_data['customer_email'],
+subject=f'Invoice #{invoice_data["id"]}',
+body=invoice_data['html_body'],
+attachment=pdf
 \`\`\`
 
-## 3. Parameter Injection
-Instead of keeping the dependency as a field, pass it only to the method that needs it.
+)
+
+
 \`\`\`python
-class UserService:
-    def update_user(self, user_id, db):
-        db.save(user_id)
+# SPROUT CLASS: when sprout method is not enough
+# Create an entirely new class for new behavior
+# Wire it in at the call site alongside the legacy class
+
+# WRAP METHOD: add behavior before/after legacy without modifying it
+def generate_invoice_with_audit(order_id: int, customer_id: int) -> dict:
 \`\`\`
 
-## The "Dependency Inversion Principle"
-By using DI, you are following the "D" in SOLID. High-level modules should not depend on low-level modules; both should depend on abstractions (interfaces). This makes the code inherently more testable and modular.`
+'''Wraps legacy generate_invoice with audit logging.'''
+audit_logger.log_start('invoice_generation', order_id=order_id)
+
+\`\`\`python
+try:
+result = generate_invoice(order_id, customer_id) # legacy untouched
+\`\`\`
+
+audit_logger.log_success('invoice_generation', invoice_id=result['id'])
+
+\`\`\`python
+return result
+except Exception as e:
+\`\`\`
+
+audit_logger.log_failure('invoice_generation', order_id=order_id, error=str(e))
+raise
+
+\`\`\`python
+# Replace calls to generate_invoice with generate_invoice_with_audit
+# Legacy code: zero changes. New behavior: fully tested.
+\`\`\``
   },
   {
     id: "13-7",
     number: "13.7",
     title: "Subclassing and Overriding for Testability",
-    content: `Sometimes, a class is so difficult to instantiate or has so many dependencies that you cannot even use Dependency Injection without a massive refactor. In these cases, we use **Subclassing and Overriding**.
+    content: `CHARACTERIZATION TESTS: Find a function in any open-source legacy project (search GitHub for 'no tests'). Write at least 10 characterization tests covering all execution paths you can find. Use coverage to verify you have covered all branches. Document any behaviors you discovered that surprised you.
+SEAM TECHNIQUE: Find a function that creates its own database connection or HTTP client. Apply the Extract and Override technique. Create a testable subclass. Write 5 unit tests using the testable subclass that run without any real database or network.
+STRANGLER FIG: Design a migration plan for replacing a hypothetical legacy authentication system with a modern JWT-based one. Describe: the routing layer, the parallel run strategy, the metrics to monitor, the rollback plan, and the criteria for declaring the migration complete.
+SPROUT METHOD: Given a 100-line untested function that generates reports, you need to add email delivery of the report. Apply the sprout method. Write the new email delivery function with complete tests. Verify the original function is not modified at all.
+DEPENDENCY BREAKING: Take an untestable module that creates its own dependencies. Apply dependency injection to make it fully testable. Before: zero tests possible. After: 10+ unit tests with no real external dependencies.
+Chapter 13 — Ten Legacy Code Truths
+Legacy code is code without tests — not old code. New code without tests is legacy from the moment it is written.
+Read tests first when exploring unfamiliar code. Tests are executable documentation showing what the code is supposed to do.
+Write characterization tests before changing legacy code. They capture current behavior — correct or not — and alert you to any change.
+Seams are places to change behavior without editing code. Function parameters, interfaces, and configuration files are all seams.
+The Strangler Fig Pattern is the safest way to replace legacy systems. Build alongside, route traffic gradually, never rewrite all at once.
+Sprout Method adds new behavior without touching risky legacy code. New function fully tested, old function untouched.
+Wrap Method adds behavior before/after legacy without modifying it. Audit logging, metrics, caching — all can be wrapped.
+Dependency Injection is the long-term solution. Inject collaborators instead of creating them. This makes testing trivial.
+Never mix refactoring with the legacy code changes you need for a feature. Characterize first, then refactor, then add the feature.
+The goal is not a perfect codebase — it is a progressively improving one. Each ticket you work on: leave it with more tests than you found.
 
-## The Technique
-1. Identify the specific method that makes testing hard (e.g., it calls a 3rd party API).
-2. Make that method \`protected\` (if the language requires it) or simply ensure it's overridable.
-3. In your test code, create a "Testing Subclass" that inherits from the class and overrides only that one method.
+CHAPTER 14
+PERFORMANCE ENGINEERING
+How to Find Real Bottlenecks, Fix Them Correctly, and Build Systems That Stay Fast Under Load
 
-### Production Code:
-\`\`\`java
-public class PaymentProcessor {
-    public void process() {
-        // ... some logic ...
-        sendToStripe(); // This is the hard part
-    }
-    
-    protected void sendToStripe() {
-        // Real network call here
-    }
-}
-\`\`\`
-
-### Test Code:
-\`\`\`java
-class TestingPaymentProcessor extends PaymentProcessor {
-    public boolean stripeCalled = false;
-    @Override
-    protected void sendToStripe() {
-        this.stripeCalled = true; // No network call!
-    }
-}
-\`\`\`
-
-## Warning
-This is a **temporary** measure. It's a "hack" to get the code under test. Once you have coverage, you should refactor to use proper interfaces and composition. Subclassing for tests can lead to "fragile tests" if the internal structure of the parent class changes significantly.`
+"Premature optimization is the root of all evil. But that does not mean you should ignore performance — it means you should measure first." — Donald Knuth (with the critical second part often omitted)`
   },
   {
     id: "13-8",
