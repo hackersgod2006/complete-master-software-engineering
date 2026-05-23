@@ -5,218 +5,656 @@ export const CH04_SECTIONS: Section[] = [
     id: "4-1",
     number: "4.1",
     title: "What an Operating System Is and Does",
-    content: `The **Operating System (OS)** is the most sophisticated piece of software on your machine. It is the "Resource Manager" that sits between the raw, chaotic hardware and the tidy, abstract world of application software.
+    content: `An operating system is a layer of software between hardware and user programs providing two fundamental services: resource management and abstraction. Resource management means dividing CPU time, memory, I/O bandwidth, and storage fairly among competing processes. Abstraction means presenting a clean hardware-independent interface so your program does not need to know whether it runs on an Intel Xeon or an Apple M3.
+Every line of code you write runs within an OS context. The OS decides when your code runs, how much memory it gets, and how it talks to hardware. Engineers who understand the OS understand the environment their code inhabits — and gain extraordinary diagnostic and optimization power as a result.
 
-## The Dual Role
-An OS serves two primary masters:
-1. **The Programmer**: It provides a clean, unified abstraction of messy hardware. Instead of writing code to talk to a specific model of NVMe SSD, you just call \`open()\` and \`read()\`.
-2. **The System**: It manages competing demands for resources (CPU, RAM, I/O) to ensure fairness, efficiency, and security.
 
-## The Primary Abstractions
-The OS creates "Virtual" versions of hardware:
-- **CPU** becomes **Processes/Threads**.
-- **RAM** becomes **Address Spaces**.
-- **Disk** becomes **Files**.
-- **Network Card** becomes **Sockets**.
-
-## Why It Matters
-Without an OS, every application would need to include its own drivers for every possible device and its own logic for sharing the CPU with other programs. A bug in a calculator app could overwrite the memory of the banking app running next to it. The OS provides the **Isolation** that makes modern computing safe.
-
----
-When you think of an OS, don't just think of the UI (Windows/macOS). Think of the **Kernel**—the invisible engine that never stops managing the pulse of the machine.
-`
+---`
   },
   {
     id: "4-2",
     number: "4.2",
     title: "The Kernel: Modes, Rings, and Privilege Levels",
-    content: `Not all code is created equal. The CPU enforces a strict hierarchy of what code is allowed to do, known as **Protection Rings**.
+    content: `A process is an instance of a running program with its own virtual address space, file descriptor table, signal handlers, current working directory, user and group IDs, and resource limits. The OS enforces these boundaries in hardware. A misbehaving process cannot corrupt another process or the kernel.
 
-## The Ring Architecture (x86)
-- **Ring 0 (Kernel Mode)**: The most privileged. Code here can do anything: disable interrupts, talk directly to hardware, and modify any memory. This is where the Kernel lives.
-- **Ring 3 (User Mode)**: The least privileged. Code here is restricted. It cannot access hardware or memory belonging to other processes. This is where your Browser, IDE, and Games live.
-- *(Rings 1 and 2 exist but are rarely used by modern OSs).*
+### 4.2.1 Process Creation: fork() and exec()
 
-## The Switch: Trap and Return
-When an application needs to do something privileged (like writing to a file), it cannot just jump into Kernel code. It must perform a **System Call**.
-1. The CPU generates a "software interrupt" or uses a special instruction (\`syscall\`).
-2. The hardware switches the CPU to Ring 0.
-3. The CPU jumps to a pre-defined "interrupt handler" inside the Kernel.
-4. Once the Kernel is done, it switches back to Ring 3 and returns control to the app.
+On Unix and Unix-like systems, all processes except the initial init process are created by fork(). fork() creates an exact copy of the calling process. The child is identical to the parent except for its PID, its PPID, and the return value of fork() itself — zero in the child, the child's PID in the parent.
 
-## The Safety Barrier
-This separation is why a crashed application usually doesn't crash your whole computer. Because the application is in Ring 3, its "blast radius" is limited to its own virtual address space. Only a bug in Ring 0 (a kernel panic or "blue screen") can bring down the entire system.
+\`\`\`python
+import os, sys, subprocess
 
-## Performance Note
-Switching between User Mode and Kernel Mode is expensive (~100-200ns). High-performance software (like high-speed networking) often tries to minimize these "mode switches" to stay fast.
-`
+# THE FORK + EXEC PATTERN: how Unix spawns every program
+pid = os.fork()
+
+if pid == 0: # CHILD PROCESS
+print(f'Child PID: {os.getpid()}, Parent: {os.getppid()}')
+# exec() replaces this process image with a new program
+\`\`\`
+
+os.execv('/bin/ls', ['/bin/ls', '-la', '/tmp'])
+
+\`\`\`python
+# Never reaches here if exec succeeds
+\`\`\`
+
+os._exit(1) # must use _exit() in child, not sys.exit()
+
+
+\`\`\`python
+else: # PARENT PROCESS
+print(f'Parent PID: {os.getpid()}, spawned child: {pid}')
+\`\`\`
+
+child_pid, status = os.waitpid(pid, 0) # wait for child
+
+\`\`\`python
+print(f'Child {child_pid} exited: {os.WEXITSTATUS(status)}')
+
+# Between fork() and exec() the child can:
+# redirect stdin/stdout/stderr for pipes
+# drop privileges (setuid/setgid)
+# set resource limits (setrlimit)
+# change working directory
+# This two-step design gives shells enormous flexibility
+
+# PREVENTING ZOMBIE PROCESSES:
+# When child exits before parent calls waitpid(), child becomes zombie
+# OS keeps exit status until parent collects it
+# Fix: always waitpid() or install SIGCHLD handler
+import signal
+def reap_children(signum, frame):
+while True:
+try:
+\`\`\`
+
+pid, _ = os.waitpid(-1, os.WNOHANG)
+
+\`\`\`python
+if pid == 0: break
+except ChildProcessError: break
+\`\`\`
+
+signal.signal(signal.SIGCHLD, reap_children)
+
+### 4.2.2 Process States
+
+State
+Description
+Common Cause
+RUNNING
+Executing on a CPU core
+Scheduled by OS; doing work
+RUNNABLE
+Ready, waiting for CPU
+I/O completed; just created; woken from sleep
+BLOCKED
+Waiting for event: I/O, lock, timer
+
+\`\`\`python
+read(), mutex.lock(), sleep(), select()
+\`\`\`
+
+STOPPED
+Paused by SIGSTOP or Ctrl+Z
+Debugger attached; user pressed Ctrl+Z
+ZOMBIE
+Exited but parent not called waitpid()
+Child exits before parent reaps it
+
+### 4.2.3 Inter-Process Communication
+
+Mechanism
+Bandwidth
+Latency
+Best For
+Anonymous Pipe
+~2 GB/s
+~1 µs
+Parent-child streaming (shell: ls | grep)
+Unix Domain Socket
+~8 GB/s
+~2 µs
+Local daemon IPC (Docker, PostgreSQL, Redis)
+Shared Memory (mmap)
+~50 GB/s
+< 100 ns
+High-throughput: video, databases, game engines
+TCP Loopback
+~20 GB/s
+~20 µs
+Services that may later be distributed
+Signal
+minimal
+~2 µs
+Lifecycle: SIGTERM (shutdown), SIGHUP (reload config)
+POSIX Message Queue
+~300 MB/s
+~5 µs
+Decoupled producers and consumers
+
+
+---`
   },
   {
     id: "4-3",
     number: "4.3",
     title: "Processes: The Unit of Isolation",
-    content: `A **Process** is an instance of a program in execution. While a program is just a static file on disk, a process is a dynamic, living entity.
+    content: `Threads share a process address space, file descriptors, and most resources but each has its own stack, registers, and program counter. Threads enable CPU parallelism and concurrent I/O. The fundamental challenge: shared memory corrupted by uncoordinated concurrent access produces data races — non-deterministic, intermittent, extraordinarily hard to reproduce.
 
-## What's in a Process?
-Each process is a container that holds:
-- **Address Space**: Its private "view" of memory (Code, Data, Heap, Stack).
-- **Registers**: The current state of the CPU (Program Counter, Stack Pointer).
-- **Resources**: Open file descriptors, network connections, locks.
-- **Security Context**: The user and group IDs that define what it's allowed to do.
+### 4.3.1 Python GIL: What It Means for You
 
-## The "Process Control Block" (PCB)
-The Kernel keeps track of every process using a data structure called the **PCB** (or \`struct task_struct\` in Linux). When the OS decides to run a different process, it saves the current CPU registers into the PCB and loads the registers of the next process.
 
-## Isolation via MMU
-The most critical part of a process is its isolation. Thanks to the Memory Management Unit (MMU), Process A cannot even "see" the memory of Process B. Every address is local to that process.
+\`\`\`python
+import threading, time, multiprocessing
 
-## The Process Hierarchy
-Processes are organized in a tree. On Linux, the first process is \`systemd\` (PID 1). Every other process is a "child" of an existing process. You can see this tree by running \`pstree\`.
+# THE GIL (Global Interpreter Lock):
+# CPython allows only ONE thread to execute Python bytecode at a time.
+# Released during I/O operations (read, write, recv, send, sleep)
 
-\`\`\`bash
-# See all processes on your system
-ps aux
+# CPU-BOUND: threading gives NO speedup (GIL blocks parallelism)
+def cpu_work(n):
+return sum(i*i for i in range(n))
+
+N = 5_000_000
+t0 = time.perf_counter()
+t1 = threading.Thread(target=cpu_work, args=(N,))
+t2 = threading.Thread(target=cpu_work, args=(N,))
 \`\`\`
 
----
-The process is the OS's way of saying: "Here is your sandbox. You can play here, but you cannot touch anyone else's toys without permission."
-`
+t1.start(); t2.start(); t1.join(); t2.join()
+
+\`\`\`python
+thread_time = time.perf_counter() - t0
+# Result: same as single-threaded or SLOWER (GIL contention)
+
+# CPU-BOUND FIX: multiprocessing (separate Python interpreters, no GIL)
+t0 = time.perf_counter()
+with multiprocessing.Pool(2) as pool:
+\`\`\`
+
+pool.map(cpu_work, [N, N])
+
+\`\`\`python
+mp_time = time.perf_counter() - t0
+# Result: ~2x faster — each process has its own GIL
+
+print(f'Threading: {thread_time:.2f}s Multiprocessing: {mp_time:.2f}s')
+
+# I/O-BOUND: threading IS effective
+# While thread A waits on network recv(), thread B runs Python code
+# GIL is RELEASED during all I/O — genuine concurrency
+# 10 simultaneous HTTP requests: threaded = ~100ms, sequential = ~1000ms
+
+# PYTHON 3.13 NO-GIL BUILD:
+# Experimental. Removes GIL for true CPU parallelism with threads.
+# Uses per-object biased reference counting.
+# Expected stable around Python 3.14.
+\`\`\`
+
+### 4.3.2 Synchronization Primitives: The Complete Guide
+
+
+\`\`\`python
+import threading
+from collections import deque
+
+# MUTEX (Lock): one thread at a time in critical section
+counter = 0
+lock = threading.Lock()
+
+def safe_increment(n):
+\`\`\`
+
+global counter
+
+\`\`\`python
+for _ in range(n):
+with lock: # acquire → critical section → release
+\`\`\`
+
+counter += 1 # without lock: race condition → lost updates
+
+
+\`\`\`python
+# WHY counter += 1 needs a lock:
+# Bytecode: LOAD_GLOBAL counter, LOAD_CONST 1, BINARY_ADD, STORE_GLOBAL
+# GIL can switch threads between ANY two bytecodes
+# Thread A reads 5. Thread B reads 5. Both write 6. Net: 6 not 7.
+# This is a lost update data race.
+
+# CONDITION VARIABLE: wait for a condition to become true
+buffer = deque(maxlen=10)
+cond = threading.Condition()
+
+def producer(items):
+for item in items:
+with cond:
+while len(buffer) == buffer.maxlen:
+\`\`\`
+
+cond.wait() # release lock + sleep atomically
+buffer.append(item)
+cond.notify_all() # wake waiting consumers
+
+
+\`\`\`python
+def consumer():
+results = []
+while True:
+with cond:
+while not buffer: # ALWAYS while-loop, never if
+\`\`\`
+
+cond.wait() # spurious wakeups are real
+
+\`\`\`python
+item = buffer.popleft()
+\`\`\`
+
+cond.notify_all() # wake producers (space freed)
+
+\`\`\`python
+if item is None: break # sentinel value means done
+\`\`\`
+
+results.append(item)
+
+\`\`\`python
+return results
+
+# SEMAPHORE: limit concurrent access to N
+db_pool = threading.Semaphore(10) # max 10 concurrent DB connections
+def query(sql):
+with db_pool: # blocks if 10 threads already inside
+return execute_sql(sql)
+
+# BARRIER: all threads must arrive before any proceed
+barrier = threading.Barrier(4)
+def worker(wid):
+result = do_phase_1(wid)
+\`\`\`
+
+barrier.wait() # ALL 4 threads must finish phase 1
+
+\`\`\`python
+do_phase_2(wid, result) # now phase 2 can use all phase 1 results
+\`\`\`
+
+### 4.3.3 Deadlock: Prevention
+
+Deadlock occurs when threads form a circular wait: A waits for B's lock, B waits for A's lock, neither can proceed. Coffman's four conditions must ALL hold: mutual exclusion, hold-and-wait, no preemption, circular wait. Break any one condition to prevent deadlock.
+
+\`\`\`python
+import threading
+lock_a = threading.Lock()
+lock_b = threading.Lock()
+
+# DEADLOCK: Thread 1 acquires A then B
+# Thread 2 acquires B then A → circular wait
+
+# FIX 1: Lock ordering — always acquire in same global order
+def thread_safe_1():
+with lock_a: # always acquire A before B
+with lock_b: # never the reverse
+\`\`\`
+
+pass # critical section
+
+
+\`\`\`python
+def thread_safe_2():
+with lock_a: # same order — deadlock impossible
+with lock_b:
+\`\`\`
+
+pass
+
+
+\`\`\`python
+# FIX 2: Try-lock with timeout
+def thread_timeout():
+if not lock_a.acquire(timeout=1.0):
+raise TimeoutError('lock_a unavailable')
+try:
+if not lock_b.acquire(timeout=1.0):
+\`\`\`
+
+lock_a.release() # release what we hold
+
+\`\`\`python
+raise TimeoutError('lock_b unavailable')
+try:
+\`\`\`
+
+pass # critical section
+finally:
+lock_b.release()
+finally:
+lock_a.release()
+
+
+\`\`\`python
+# DETECTING DEADLOCK IN PRODUCTION:
+# Java: jstack PID → shows all threads and lock ownership
+# Go: runtime panics with 'all goroutines are asleep — deadlock'
+# Python: faulthandler.dump_traceback_later(5) dumps stacks after 5s
+# Linux: watchdog thread alerts if lock held > N seconds
+\`\`\`
+
+---`
   },
   {
     id: "4-4",
     number: "4.4",
     title: "Process Creation: fork(), exec(), and waitpid()",
-    content: `In Unix-like systems, process creation is a two-step dance: **fork** and **exec**. This design is unique and incredibly powerful.
+    content: `The CPU scheduler decides which runnable thread gets CPU time. Scheduling decisions happen thousands of times per second and directly determine application responsiveness. Understanding scheduling explains latency spikes, priority starvation, and how to tune process priorities.
+Algorithm
+Core Idea
+Strength
+Linux Usage
+Round Robin
+Time quantum (1-100ms), preempt if not done
+Fair, no starvation
+Default for normal processes
+CFS (Completely Fair Scheduler)
+Run thread with lowest accumulated virtual runtime
+Fair weighted distribution
+Linux default since 2.6.23
+EEVDF (Linux 6.6+)
+Eligible earliest deadline first
+Better latency
+Linux 6.6+ replacing CFS
+SCHED_FIFO (Real-Time)
+Runs until done or preempted by higher RT task
+Guaranteed low latency
+Audio, HFT, robotics
+SCHED_BATCH
+Treats process as batch — lower priority
+Good for background jobs
+CI builds, backups
 
-## 1. fork(): The Clone
-The \`fork()\` system call creates an exact duplicate of the calling process. 
-- The **Parent** gets the PID of the child as the return value.
-- The **Child** gets \`0\` as the return value.
-This is the only way a new process is born.
 
-## 2. exec(): The Brain Swap
-The \`exec()\` family of calls replaces the current process's memory (code, data, stack) with a new program from disk. The PID remains the same, but the "soul" of the process is replaced.
+\`\`\`python
+# MEASURING CONTEXT SWITCH COST: pipe ping-pong benchmark
+import os, time
 
-## 3. waitpid(): The Cleanup
-When a child process finishes, it doesn't disappear immediately. It enters a "Zombie" state. The parent must call \`wait()\` or \`waitpid()\` to collect the child's exit status and allow the OS to fully reclaim its resources.
-
-## Example in C
-\`\`\`c
-pid_t pid = fork();
-
-if (pid == 0) {
-    // I am the child
-    execlp("ls", "ls", "-l", NULL);
-} else {
-    // I am the parent
-    int status;
-    waitpid(pid, &status, 0);
-    printf("Child finished with status %d\\n", status);
-}
+def measure_context_switch(iterations=100_000):
+# Two pipes: parent→child and child→parent
 \`\`\`
 
-## Why this design?
-By separating cloning (\`fork\`) from execution (\`exec\`), the child has a chance to set up its environment (redirecting file descriptors, changing priority) *before* the new program starts. This is how shell redirection (\`ls > out.txt\`) works.
-`
+pr, pw = os.pipe() # parent reads, child writes
+cr, cw = os.pipe() # child reads, parent writes
+
+
+\`\`\`python
+pid = os.fork()
+if pid == 0: # CHILD
+\`\`\`
+
+os.close(pr); os.close(cw)
+
+\`\`\`python
+for _ in range(iterations):
+\`\`\`
+
+os.read(cr, 1) # wait for parent ping
+os.write(pw, b'x') # send pong
+os._exit(0)
+
+\`\`\`python
+else: # PARENT
+\`\`\`
+
+os.close(cr); os.close(pw)
+
+\`\`\`python
+t0 = time.perf_counter()
+for _ in range(iterations):
+\`\`\`
+
+os.write(cw, b'x') # ping
+os.read(pr, 1) # wait for pong
+
+\`\`\`python
+elapsed = time.perf_counter() - t0
+\`\`\`
+
+os.waitpid(pid, 0)
+
+\`\`\`python
+# 2 context switches per iteration
+us = elapsed / (iterations * 2) * 1_000_000
+print(f'Context switch cost: {us:.1f} µs')
+# Typical: 2-5 µs on modern hardware
+
+measure_context_switch()
+
+# WHY THIS MATTERS FOR ARCHITECTURE:
+# 10,000 threads × 100 switches/sec × 3 µs = 3 seconds of switching/sec
+# 30% of server CPU wasted on context switches at high concurrency
+# Async I/O (event loop): ZERO context switches for I/O handling
+# This is why nginx beats Apache at high connection counts
+
+# TUNING PROCESS PRIORITY:
+\`\`\`
+
+os.nice(10) # lower priority (nice 0-19, higher = nicer = lower priority)
+
+\`\`\`python
+# os.nice(-5) # higher priority (requires root / CAP_SYS_NICE)
+# $ nice -n 10 ./batch_job start command at lower priority
+# $ renice -n 5 -p PID change priority of running process
+# $ chrt -f -p 50 PID set SCHED_FIFO real-time priority 50 (requires root)
+\`\`\`
+
+---`
   },
   {
     id: "4-5",
     number: "4.5",
     title: "Process States: Running, Runnable, Blocked, Zombie",
-    content: `A process is not always "running" on the CPU. At any given moment, the thousands of processes on your system are in various states.
+    content: `System calls are how user programs request kernel services. Every file read, network connection, memory allocation, and process creation invokes a system call. They cost 100-400ns each due to ring transition and kernel validation. Minimizing and batching syscalls is a real performance optimization.
 
-## The State Lifecycle
-1. **Running**: The process is currently using a CPU core.
-2. **Runnable (Ready)**: The process is ready to work, but it's waiting for the Scheduler to give it a turn on the CPU.
-3. **Blocked (Sleeping)**: The process is waiting for something else to happen (e.g., waiting for data from the disk, a packet from the network, or a timer to expire). It cannot run even if a CPU is free.
-4. **Zombie**: The process has finished execution but its parent hasn't acknowledged it yet. It consumes no memory, just an entry in the process table.
+\`\`\`python
+# WHAT HAPPENS WHEN Python CALLS open('file.txt', 'r'):
+\`\`\`
 
-## State Transitions
-- **Running -> Blocked**: A web server calls \`recv()\` and waits for a request.
-- **Blocked -> Runnable**: The network packet arrives.
-- **Runnable -> Running**: The Scheduler picks the process.
+#
 
-## Visualizing with 'top'
-When you run \`top\` or \`htop\`, look at the 'S' column:
-- \`R\`: Running/Runnable
-- \`S\`: Interruptible Sleep (waiting for an event)
-- \`D\`: Uninterruptible Sleep (usually waiting for Disk I/O—cannot be killed even with \`kill -9\`)
-- \`Z\`: Zombie
+\`\`\`python
+# 1. Python runtime → C library fopen() → glibc open() wrapper
+# 2. glibc sets registers: RAX=2 (syscall number for open on Linux x86-64)
+# RDI=pointer to filename string
+# RSI=O_RDONLY flags
+# 3. SYSCALL instruction: CPU switches to ring 0 (kernel mode)
+# saves user registers, loads kernel stack
+# 4. Kernel sys_openat(): validates filename, checks permissions,
+# allocates file descriptor entry, creates struct file
+# 5. SYSRET: restores user registers, returns fd in RAX
+\`\`\`
 
-## The "Load Average"
-The "Load Average" you see in Linux represents the number of processes in the **Running** or **Runnable** states (plus those in uninterruptible sleep). If you have 4 CPU cores and a load average of 10, it means 6 processes are constantly waiting for their turn.
-`
+#
+
+\`\`\`python
+# COST: ~100-150ns before Meltdown mitigations
+# ~200-400ns with KPTI (Kernel Page Table Isolation)
+
+# STRACE: see every syscall your program makes
+# $ strace -c python3 -c 'print(42)'
+\`\`\`
+
+#
+
+\`\`\`python
+# % time calls syscall
+# 45.2 46 mmap (allocate virtual memory)
+# 28.4 37 openat (open files for imports)
+# 15.8 33 read (read module files)
+# 0.5 1 write (the actual print!)
+\`\`\`
+
+#
+
+\`\`\`python
+# 200+ syscalls just to print '42'
+# The write to stdout is 0.5% of all syscalls
+# Everything else is Python startup and module loading
+
+# REDUCING SYSCALL OVERHEAD:
+# 1. Batch writes: one write(64KB) beats 64 × write(1KB)
+# 2. io_uring (Linux 5.1+): submit many I/Os with ONE syscall
+# Shared ring buffers between kernel and userspace → >10M IOPS
+# 3. vDSO: gettimeofday, clock_gettime mapped to user space
+# No ring transition needed: ~5ns instead of ~200ns
+# 4. mmap files: access via memory, no read/write syscalls per access
+# 5. splice/sendfile: zero-copy transfer in kernel space
+\`\`\``
   },
   {
     id: "4-6",
     number: "4.6",
     title: "Inter-Process Communication: Pipes, Sockets, Shared Memory, Signals",
-    content: `Since processes are isolated, they need specific mechanisms to talk to each other. This is **IPC (Inter-Process Communication)**.
+    content: `Understanding file I/O semantics — specifically the difference between data in OS cache and data on stable storage — is essential for building correct, durable applications. This is where most engineers have dangerous gaps.
 
-## 1. Signals
-The simplest form of IPC. A "ping" sent to a process.
-- **Example**: \`SIGINT\` (Ctrl+C), \`SIGKILL\` (Terminates the process).
-- **Limitation**: Can't send data, just a notification.
+\`\`\`python
+import os
 
-## 2. Pipes
-A one-way data channel.
-- **Anonymous Pipes**: Used in the shell (\`ls | grep\`).
-- **Named Pipes (FIFOs)**: Appear as files on disk.
+# THE DURABILITY HIERARCHY:
+\`\`\`
 
-## 3. Sockets
-The most flexible IPC.
-- **Unix Domain Sockets**: High-speed communication on the *same* machine.
-- **TCP/UDP Sockets**: Communication across the *network*.
-Used by almost all modern microservices.
+#
 
-## 4. Shared Memory
-The fastest form of IPC. Two processes map the same physical RAM into their own address spaces.
-- **Pro**: Data doesn't need to be copied.
-- **Con**: Processes must use Mutexes/Semaphores to avoid overwriting each other's data.
+\`\`\`python
+# write(fd, data) → data in OS page cache. NOT on stable storage.
+# Power failure: data MAY be lost. Speed: ~500ns.
+\`\`\`
 
-## 5. Message Queues
-A structured way to send "messages" (packets of data) between processes. Managed by the kernel, providing a buffer if the receiver is slow.
+#
 
-| Method | Speed | Complexity | Use Case |
-|--------|-------|------------|----------|
-| Signals | Very Fast | Low | Process control |
-| Pipes | Fast | Medium | Shell scripting |
-| Sockets | Moderate | High | Distributed systems |
-| Shared Memory | Blazing | Very High | High-perf databases |
-`
+\`\`\`python
+# fdatasync(fd) → data and minimal metadata on stable storage.
+# Power failure: data survives. Speed: ~1-10ms.
+\`\`\`
+
+#
+
+\`\`\`python
+# fsync(fd) → data AND all metadata on stable storage.
+# Stricter than fdatasync. Slightly slower.
+
+# WRITING CORRECTLY: write() may return fewer bytes than requested
+def write_all(fd, data):
+sent = 0
+while sent < len(data):
+n = os.write(fd, data[sent:])
+if n == 0: raise IOError('write returned 0')
+\`\`\`
+
+sent += n
+
+
+\`\`\`python
+# ATOMIC FILE UPDATE — crash-safe pattern:
+def atomic_write(path, content):
+\`\`\`
+
+'''
+Write to temp file, sync, rename.
+POSIX rename() is atomic: readers see old OR new, never partial.
+'''
+
+\`\`\`python
+tmp = path + '.tmp'
+fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+try:
+write_all(fd, content)
+\`\`\`
+
+os.fdatasync(fd) # ensure content is on disk
+finally:
+os.close(fd)
+os.rename(tmp, path) # atomic directory entry update
+
+\`\`\`python
+# Sync the directory to ensure rename survives power failure:
+dir_fd = os.open(os.path.dirname(path) or '.', os.O_RDONLY)
+\`\`\`
+
+os.fsync(dir_fd)
+os.close(dir_fd)
+
+
+\`\`\`python
+# WRITE-AHEAD LOG (WAL) — how databases achieve durability:
+# Instead of writing data pages immediately (random writes = slow),
+# write to sequential append-only log first, then acknowledge.
+# On crash: replay the log to reconstruct state.
+# PostgreSQL, MySQL InnoDB, SQLite, etcd, RocksDB, Kafka all use WAL.
+# Result: durable writes at sequential I/O speed (~2 GB/s NVMe)
+# instead of random I/O speed (~100K IOPS × 4KB = 400 MB/s)
+
+# COMMON DURABILITY BUGS:
+# Bug 1: write() without fdatasync() before acknowledging to client
+# → client believes data is safe, power failure loses it
+# Bug 2: updating file in-place without atomic rename
+# → crash mid-write produces half-old half-new corrupt file
+# Bug 3: syncing file but not directory
+# → rename may not survive power failure on some filesystems
+\`\`\`
+
+
+⚠️ THE fsync() LIE — Pre-Linux 4.16
+Before Linux 4.16: I/O errors during page writeback were silently discarded.
+The next fsync() returned SUCCESS even though data was NOT on disk.
+
+PostgreSQL called fsync() and believed the WAL was durable.
+It acknowledged transactions as committed.
+The WAL data was NOT actually on disk.
+On crash: recovery produced corrupted data.
+
+Fix: Linux 4.16 now reliably reports writeback errors to next fsync().
+
+Lesson: durability guarantees are layered. Test your full storage stack.
+Especially on cloud block storage — EBS, GCS PD, Azure Disk.
+Never assume fsync means what you think until you have verified it.`
   },
   {
     id: "4-7",
     number: "4.7",
     title: "Threads: Concurrency Within a Process",
-    content: `If a process is a "container," a **Thread** is the actual "unit of execution." A process can have many threads, all sharing the same resources.
+    content: `Build a minimal shell: fork+exec commands, handle pipes (cmd1 | cmd2), I/O redirection (> file, < file), background jobs (&), zombie reaping via SIGCHLD handler. Measure fork+exec+waitpid latency for a trivial command.
+Deadlock experiment: 5 threads, 5 locks. Create a version that deadlocks. Fix with lock ordering. Add timeout detection. Report time to deadlock and false positive rate of timeout detection.
+Context switch benchmark: pipe ping-pong. Vary thread count 1,2,4,8,16,32. Pin threads with os.sched_setaffinity(). Compare voluntary vs involuntary switches via /proc/PID/status.
+strace analysis: Profile (a) python3 -c 'print(42)', (b) HTTP server handling one request, (c) SQLite with 1000 INSERTs. Count syscalls, identify top 3 by count and time, find one optimization for each.
+Durable key-value store: put(key, value) and get(key) backed by a WAL. put() must survive SIGKILL. Test: write 1000 records, SIGKILL the process, restart, verify all 1000 present. Measure throughput.
+Chapter 4 — Twelve OS Engineering Truths
+Every Unix process descends from fork(). fork()+exec() gives full control over environment, I/O, and privileges before the new program starts.
+Zombies accumulate if waitpid() is never called. Install a SIGCHLD handler or explicitly wait for every spawned child process.
+Python GIL prevents CPU parallelism for pure Python threads. Use multiprocessing for CPU-bound. Threads work correctly for I/O-bound work.
+Deadlock requires four conditions simultaneously. Break any one: enforce lock ordering, use timeouts, or eliminate hold-and-wait.
+A context switch costs 1-15 µs. Thousands of threads at high concurrency waste significant CPU. Async I/O eliminates this overhead.
+System calls cost 100-400 ns. Batch I/O. Use io_uring for high throughput. Use mmap to eliminate repeated read/write syscall overhead.
 
-## The Shared and the Private
-In a multi-threaded process:
-- **Shared**: Address Space (Heap, Code, Global Data), File Descriptors, Signals.
-- **Private**: Program Counter (PC), Registers, Stack.
-
-## Why Threads?
-1. **Performance**: Creating a thread is much cheaper than creating a process (no need to copy page tables).
-2. **Communication**: Threads share the same heap, so they can talk to each other just by reading/writing variables (no IPC needed).
-3. **Responsiveness**: A background thread can handle a long-running calculation while the main thread keeps the UI responsive.
-
-## The Danger: Data Races
-Because threads share memory, they can try to modify the same variable at the same time.
-\`\`\`c
-// Thread A: x = x + 1
-// Thread B: x = x + 1
-// Result: x might only be incremented once!
+\`\`\`python
+write() does NOT guarantee durability. Only fdatasync() or fsync() after write() guarantees data reaches stable storage hardware.
 \`\`\`
-This is why multi-threaded programming requires **Synchronization** (Mutexes, Locks).
 
-## Kernel-Level vs User-Level Threads
-- **Kernel Threads**: Managed by the OS. The OS knows about them and can schedule them on different CPU cores.
-- **User Threads (Green Threads)**: Managed by a language runtime (like Go's goroutines). Thousands can run on a single OS thread.
+Atomic file update: write temp file, fdatasync, rename(). POSIX rename is atomic. Never update a file in-place without atomic replace.
+The Write-Ahead Log is why databases can be fast (sequential writes) AND durable (log replayed on crash recovery).
+CFS runs thread with least accumulated virtual runtime. nice values adjust weight. cgroups impose hard CPU percentage limits.
+strace reveals what code actually does at the OS level. Use it for mysterious slowness, unexpected file access, and permission failures.
+fsync success does not guarantee durability on all Linux kernel versions below 4.16. Test crash-consistency explicitly on your storage stack.
+
 
 ---
-Threads give you "Parallelism" (doing things at the same time), but they come at the cost of "Concurrency" bugs that are notoriously hard to debug.
-`
+
+
+CHAPTER 5
+DATA STRUCTURES: THEORY TO MASTERY
+Every Structure, Every Operation, Every Trade-off — Completely Understood
+
+"Smart data structures and dumb code works a lot better than the other way around." — Eric S. Raymond`
   },
   {
     id: "4-8",
