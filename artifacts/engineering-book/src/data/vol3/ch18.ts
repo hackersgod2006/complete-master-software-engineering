@@ -5,138 +5,487 @@ export const CH18_SECTIONS: Section[] = [
     id: "18-1",
     number: "18.1",
     title: "The Strategic Value of DDD",
-    content: `**Domain-Driven Design (DDD)**, introduced by Eric Evans in 2003, is an approach to software development for complex needs by connecting the implementation to an evolving model. DDD is not about technology—it's about **Modeling**.
+    content: `Domain-Driven Design (DDD) is an approach to software development that focuses the design on the core domain and domain logic, and bases complex design decisions on a model of the domain. It was introduced by Eric Evans in his 2003 book of the same name and has profoundly influenced how serious engineers think about complex business software.
+DDD is most valuable when the domain is genuinely complex — insurance underwriting, financial derivatives pricing, supply chain optimization, healthcare workflows. For simple CRUD applications, DDD's full weight is overkill. For complex domains with deep business rules, it is the difference between software that remains maintainable for a decade and software that collapses under its own complexity.
 
-## The Core Premise
-Most software projects fail not because of "bad code" or "slow databases," but because of a **misalignment** between the software and the business domain it is meant to serve. If the developers think in terms of "tables" and "rows" while the business experts think in terms of "underwriting" and "exposure," the project is doomed to become a "Big Ball of Mud."
 
-## Strategic vs. Tactical DDD
-DDD is split into two halves:
-1. **Strategic DDD:** Focuses on the "Big Picture"—how to divide a large system into manageable pieces (Bounded Contexts) and how those pieces relate to each other.
-2. **Tactical DDD:** Focuses on the "Internal Patterns"—how to model the logic inside a single context (Entities, Value Objects, Aggregates).
-
-## The Strategic Value
-The real value of DDD is that it provides a way to manage **Domain Complexity**. It encourages engineers to become "domain experts" who speak the same language as the business. When the code reflects the mental model of the business, the system becomes more resilient to change, easier to test, and significantly more valuable to the organization.`
+---`
   },
   {
     id: "18-2",
     number: "18.2",
     title: "The Ubiquitous Language: Building It and Using It",
-    content: `The most important concept in DDD is the **Ubiquitous Language (UL)**. It is a language shared by everyone on the team—developers, domain experts, and stakeholders.
+    content: `Ubiquitous Language is the single most important concept in DDD. It is a common, shared language between developers and domain experts — not a developer language that domain experts need to translate, and not a business language that developers need to interpret. The same terms appear in conversations, requirements, diagrams, tests, and code. When the language changes in conversation, the code changes too.
 
-## The Problem of Translation
-In traditional projects, there is a "translation" step:
-- Business expert: "We need to *onboard* a new *vendor*."
-- Developer (thinking): "Okay, so I need to \`INSERT\` into the \`Providers\` table and set \`status=1\`."
-This translation is where bugs are born. If the business changes what "onboard" means, the developer might not update the code correctly because they don't see the word "onboard" in their files.
+\`\`\`python
+# UBIQUITOUS LANGUAGE IN CODE
 
-## Building the Language
-In DDD, the code **must** use the same terms as the business.
-\`\`\`typescript
-// Bad: Lacks Ubiquitous Language
-user.setStatus(1);
-
-// Good: Uses Ubiquitous Language
-user.onboard();
+# WITHOUT UBIQUITOUS LANGUAGE: developer-centric terminology
+class PolicyRecord:
+def process_claim_entry(self, claim_id: int, amt: float) -> bool:
+if self.status_code == 1 and self.balance_remaining >= amt:
 \`\`\`
-The UL is not just for names; it's for **behaviors**. If the business says, "A customer *accrues* interest," then you should have a method called \`accrueInterest()\`, not \`calculateAndAddInterest()\`.
 
-## Where the UL Lives
-- In the code (class names, methods, variables).
-- In the tests (the descriptions of the test cases).
-- In the meetings and Slack channels.
-- In the Architecture Decision Records (ADRs).
+self.balance_remaining -= amt
+self.claim_records.append({'id': claim_id, 'amount': amt})
 
-If a term is ambiguous, the team must meet and decide on a single definition. The UL is the "glue" that holds the entire DDD process together.`
+\`\`\`python
+return True
+return False
+
+# Business team says: 'When a claim is submitted on an active policy,
+# and the claim amount is within the remaining coverage limit,
+# the claim should be approved and the coverage used should be deducted.'
+# Code and business speak different languages — translation needed constantly.
+
+# WITH UBIQUITOUS LANGUAGE: code reads like the business speaks
+class InsurancePolicy:
+def submit_claim(self, claim: 'Claim') -> 'ClaimDecision':
+if not self.is_active():
+return ClaimDecision.denied(reason='Policy is not active')
+if not self.has_sufficient_coverage(claim.amount):
+return ClaimDecision.denied(reason='Claim exceeds remaining coverage')
+\`\`\`
+
+self.deduct_coverage(claim.amount)
+self.record_claim(claim)
+
+\`\`\`python
+return ClaimDecision.approved(claim)
+
+def is_active(self) -> bool:
+from datetime import date
+return (self.status == PolicyStatus.ACTIVE and
+\`\`\`
+
+self.effective_date <= date.today() <= self.expiry_date)
+
+
+\`\`\`python
+def has_sufficient_coverage(self, amount: float) -> bool:
+return self.remaining_coverage_limit >= amount
+
+def deduct_coverage(self, amount: float) -> None:
+\`\`\`
+
+self.remaining_coverage_limit -= amount
+
+
+\`\`\`python
+# SAME language in:
+# Business meeting: 'The policy must be active to approve a claim'
+# Test: assert policy.is_active() == True
+# Code: if not self.is_active(): return ClaimDecision.denied()
+# Database: policies.status = 'ACTIVE'
+# API docs: POST /policies/{id}/claims requires policy to be active
+
+# When business changes language: change the code immediately.
+# 'We now call it a claim filing, not a claim submission'
+# -> rename submit_claim to file_claim everywhere at once
+\`\`\``
   },
   {
     id: "18-3",
     number: "18.3",
     title: "Bounded Contexts: The Map of Your Domain",
-    content: `A **Bounded Context** is a linguistic and logical boundary within which a specific model is defined and applicable. It is the solution to the "Global Model" problem.
+    content: `A Bounded Context is an explicit boundary within which a particular domain model applies. The same concept can mean different things in different contexts — and that is correct. A 'Customer' in the sales context (prospect, opportunity, contract value) is different from a 'Customer' in the delivery context (address, delivery instructions, preferences) and different from a 'Customer' in the billing context (payment method, invoice history, credit limit). Forcing one unified Customer model to serve all three contexts creates a monster.
 
-## The Myth of the "Enterprise Model"
-Many organizations try to create one giant "User" or "Product" model that covers every department. This is a mistake.
-- To the **Sales** department, a "Product" has a price, a description, and a lead time.
-- To the **Warehouse**, a "Product" has a weight, dimensions, and a shelf location.
-- To the **Shipping** department, a "Product" has a customs code and a tracking number.
+\`\`\`python
+# BOUNDED CONTEXTS: same concept, different models
 
-Trying to force all these into one \`Product\` class leads to a massive, bloated object with hundreds of fields that no single team understands.
+# SALES CONTEXT: Customer is a prospect/account
+class SalesCustomer:
+\`\`\`
 
-## Defining the Boundary
-A Bounded Context allows each department to have its own model of the "Product." Inside the **Warehouse Context**, a Product is simple and focused. It doesn't know about prices or marketing slogans.
+customer_id: int
+company_name: str
+annual_revenue: float
+assigned_sales_rep: str
+deal_stage: str # prospect, qualified, proposal, closed
+contract_value: float
+preferred_contact: str
 
-## Bounded Context vs. Subdomain
-- **Subdomain:** A part of the business (e.g., "The Inventory Subdomain"). It exists whether we write software for it or not.
-- **Bounded Context:** A part of our *software* (e.g., "The Inventory Service"). It is where we implement our model.
 
-Ideally, each Bounded Context should align 1:1 with a Subdomain and be owned by a single team. This is the "Strategic" heart of DDD and the primary way we determine where to draw microservice boundaries.`
+\`\`\`python
+# DELIVERY CONTEXT: Customer is a delivery recipient
+class DeliveryCustomer:
+\`\`\`
+
+customer_id: int # same ID, different model
+delivery_name: str
+delivery_address: 'Address'
+access_instructions: str
+preferred_time_slot: str
+delivery_notes: str
+
+
+\`\`\`python
+# BILLING CONTEXT: Customer is a payment entity
+class BillingCustomer:
+\`\`\`
+
+customer_id: int # same ID, different model
+legal_entity_name: str
+billing_address: 'Address'
+payment_method: 'PaymentMethod'
+credit_limit: float
+payment_terms: str # NET30, NET60, COD
+invoice_history: list
+
+
+\`\`\`python
+# These three models SHARE a customer_id (the integration point)
+# but each has DIFFERENT attributes relevant to its context.
+# No single Customer class could serve all three without becoming
+# a god object with 30+ fields, most irrelevant to any single context.
+
+# CONTEXT MAP: how contexts relate
+# Sales → Billing: when deal closes, Sales sends CustomerCreated event
+# Billing creates BillingCustomer from the event data
+# Sales → Delivery: when order placed, Sales sends OrderPlaced event
+# Delivery creates DeliveryCustomer if not exists
+# Translation happens at context boundaries: event contains shared ID
+
+# ANTI-CORRUPTION LAYER: protect your model from another context's model
+class DeliveryContextTranslator:
+def from_sales_event(self, event: dict) -> 'DeliveryCustomer':
+return DeliveryCustomer(
+customer_id=event['customer_id'],
+delivery_name=event['contact_name'], # different naming
+delivery_address=self._translate_address(event['address']),
+access_instructions='',
+preferred_time_slot='any',
+delivery_notes=''
+\`\`\`
+
+)
+
+
+\`\`\`python
+def _translate_address(self, sales_address: dict) -> 'Address':
+return Address(
+street=sales_address['street_line_1'],
+city=sales_address['city_name'], # sales uses 'city_name'
+postal_code=sales_address['zip'] # sales uses 'zip'
+\`\`\`
+
+)
+
+\`\`\`python
+# Anti-corruption layer: Delivery context never imports Sales context types
+# It translates at the boundary, keeping its model clean
+\`\`\`
+
+---`
   },
   {
     id: "18-4",
     number: "18.4",
     title: "Context Mapping: Relationships Between Contexts",
-    content: `Once you have identified your Bounded Contexts, you must define how they interact. **Context Mapping** describes the patterns of integration between these boundaries.
+    content: `\`\`\`python
+# ENTITY: defined by identity, not attributes
+# Same entity even if all attributes change. Two entities with same attributes are NOT the same.
+from dataclasses import dataclass, field
+from typing import List
+import uuid
 
-## Common Mapping Patterns
-1. **Shared Kernel:** Two contexts share a small part of the model (e.g., a shared library of common types). This creates coupling and should be used sparingly.
-2. **Customer/Supplier:** The "Supplier" (Upstream) provides a service that the "Customer" (Downstream) uses. The supplier takes the customer's needs into account.
-3. **Conformist:** The Downstream context simply accepts the model of the Upstream context as-is (common when using 3rd-party APIs like Stripe).
-4. **Anticorruption Layer (ACL):** The Downstream context creates a "translation layer" to protect its internal model from the messy or different model of the Upstream context. **This is the most powerful tool for integration.**
-5. **Open Host Service:** The Upstream context provides a public API (like a REST API) that anyone can use.
-6. **Separate Ways:** The contexts have no relationship at all.
+@dataclass
+class OrderItem:
+\`\`\`
 
-## Upstream and Downstream
-- **Upstream (U):** The context that provides the data/service. If it changes, the downstream might break.
-- **Downstream (D):** The context that consumes the data/service.
+sku: str
+quantity: int
+unit_price_cents: int
 
-Understanding the "power dynamic" between contexts is essential for managing architectural risk. If you are "Downstream" from a team that doesn't care about your requirements, you MUST implement an **Anticorruption Layer** to prevent their changes from breaking your domain model.`
+
+\`\`\`python
+@property
+def total_price_cents(self) -> int:
+return self.unit_price_cents * self.quantity
+
+@dataclass
+class Order: # ENTITY: has a unique identity (id)
+\`\`\`
+
+id: str = field(default_factory=lambda: str(uuid.uuid4()))
+customer_id: str = ''
+items: List[OrderItem] = field(default_factory=list)
+status: str = 'pending'
+
+
+\`\`\`python
+def __eq__(self, other) -> bool:
+if not isinstance(other, Order): return False
+return self.id == other.id # equality by IDENTITY, not attributes
+
+def __hash__(self): return hash(self.id)
+
+# Two Order objects with the same id are the SAME order
+# even if their status differs (one is fetched from cache, one from db)
+
+# VALUE OBJECT: defined by its attributes, no identity
+# Two value objects with same attributes ARE the same.
+@dataclass(frozen=True) # frozen: immutable (value objects should never change)
+class Money:
+\`\`\`
+
+amount: int # in cents to avoid float issues
+currency: str # 'USD', 'EUR', 'NGN'
+
+
+\`\`\`python
+def __add__(self, other: 'Money') -> 'Money':
+if self.currency != other.currency:
+raise ValueError(f'Cannot add {self.currency} and {other.currency}')
+return Money(self.amount + other.amount, self.currency)
+
+def __mul__(self, factor: int) -> 'Money':
+return Money(self.amount * factor, self.currency)
+
+def __str__(self) -> str:
+return f'{self.currency} {self.amount / 100:.2f}'
+
+@dataclass(frozen=True)
+class Address:
+\`\`\`
+
+street: str
+city: str
+postal_code: str
+country: str
+
+
+\`\`\`python
+def is_domestic(self, home_country: str) -> bool:
+return self.country == home_country
+
+# Two Address objects with the same fields ARE the same address
+a1 = Address('123 Main St', 'Lagos', '100001', 'NG')
+a2 = Address('123 Main St', 'Lagos', '100001', 'NG')
+assert a1 == a2 # True: value equality
+
+# AGGREGATE: cluster of objects treated as a unit for data changes
+# Has one AGGREGATE ROOT: the entry point for all operations
+# Invariants are enforced at the aggregate level
+@dataclass
+class Order: # ORDER is the aggregate root
+\`\`\`
+
+id: str = field(default_factory=lambda: str(uuid.uuid4()))
+customer_id: str = ''
+items: List[OrderItem] = field(default_factory=list)
+status: str = 'pending'
+shipping_address: 'Address' = None
+
+
+\`\`\`python
+def add_item(self, item: OrderItem) -> None:
+if self.status != 'pending':
+raise DomainError('Can only add items to pending orders')
+existing = next((i for i in self.items if i.sku == item.sku), None)
+if existing:
+\`\`\`
+
+self.items.remove(existing)
+self.items.append(OrderItem(
+
+\`\`\`python
+sku=item.sku,
+quantity=existing.quantity + item.quantity,
+unit_price_cents=item.unit_price_cents
+\`\`\`
+
+))
+
+\`\`\`python
+else:
+\`\`\`
+
+self.items.append(item)
+
+
+\`\`\`python
+def remove_item(self, sku: str) -> None:
+if self.status != 'pending':
+raise DomainError('Can only remove items from pending orders')
+\`\`\`
+
+self.items = [i for i in self.items if i.sku != sku]
+
+
+\`\`\`python
+def confirm(self, shipping_address: Address) -> None:
+if not self.items:
+raise DomainError('Cannot confirm empty order')
+if self.status != 'pending':
+raise DomainError(f'Cannot confirm order in {self.status} status')
+\`\`\`
+
+self.shipping_address = shipping_address
+self.status = 'confirmed'
+
+
+\`\`\`python
+def calculate_total(self) -> Money:
+total = sum(i.total_price_cents for i in self.items)
+return Money(total, 'NGN')
+
+# AGGREGATE RULE: only modify OrderItem through the Order aggregate root
+# NEVER: db.session.query(OrderItem).filter_by(order_id=oid).update(...)
+# ALWAYS: order.add_item() or order.remove_item()
+# This ensures invariants (no items in confirmed order) are always enforced
+\`\`\``
   },
   {
     id: "18-5",
     number: "18.5",
     title: "Entities vs Value Objects",
-    content: `In Tactical DDD, we distinguish between two primary types of domain objects: **Entities** and **Value Objects**. Understanding the difference is critical for data integrity and system performance.
+    content: `\`\`\`python
+# DOMAIN EVENTS: things that happened in the domain
+# Named in past tense, immutable, carry all relevant context
+from dataclasses import dataclass
+from datetime import datetime
+import uuid
 
-## Entities: Identity Matters
-An **Entity** is an object that is defined by its **Identity** rather than its attributes.
-- **Example:** A \`User\`. If a user changes their name, email, and password, they are still the same "Person" because they have the same \`user_id\`.
-- **Properties:** They are mutable, they have a unique ID, and they have a lifecycle (created, modified, deleted).
+@dataclass(frozen=True)
+class DomainEvent:
+\`\`\`
 
-## Value Objects: Attributes Matter
-A **Value Object** is an object that is defined solely by its **Attributes**. It has no identity.
-- **Example:** \`Money(amount: 10, currency: 'USD')\`. If you swap one $10 bill for another, you still have the same "value." If you change the amount to 20, it is now a *different* Value Object.
-- **Properties:** They are **Immutable**. To "change" a value object, you replace the entire instance with a new one. They have no ID.
+event_id: str = None
+occurred_at: datetime = None
 
-## Why Value Objects are Better
-Value Objects are safer and easier to work with.
-1. **No Side Effects:** Since they are immutable, you can pass them around without worrying that another part of the code will change them.
-2. **Self-Validation:** The constructor of a \`EmailAddress\` Value Object can ensure the email is valid. Once created, you know it's correct.
-3. **Implicit Equality:** Two Value Objects are equal if all their fields are equal (\`5 USD === 5 USD\`).
 
-**Professor's Tip:** When modeling, try to use as many Value Objects as possible. Only make something an Entity if you truly need to track its identity over time. A common mistake is making \`Address\` an entity; unless you are a postal service tracking specific buildings, an address is just a value.`
+\`\`\`python
+def __post_init__(self):
+\`\`\`
+
+object.__setattr__(self, 'event_id', str(uuid.uuid4()))
+object.__setattr__(self, 'occurred_at', datetime.utcnow())
+
+
+\`\`\`python
+@dataclass(frozen=True)
+class OrderPlaced(DomainEvent):
+\`\`\`
+
+order_id: str = ''
+customer_id: str = ''
+items: tuple = () # tuple for immutability
+total_amount: 'Money' = None
+
+
+\`\`\`python
+@dataclass(frozen=True)
+class OrderCancelled(DomainEvent):
+\`\`\`
+
+order_id: str = ''
+customer_id: str = ''
+reason: str = ''
+
+
+\`\`\`python
+@dataclass(frozen=True)
+class PaymentReceived(DomainEvent):
+\`\`\`
+
+order_id: str = ''
+amount: 'Money' = None
+payment_method: str = ''
+
+
+\`\`\`python
+# Aggregates collect domain events during operation:
+class Order:
+def __init__(self, ...):
+\`\`\`
+
+self._events = [] # events raised this session
+
+
+\`\`\`python
+def place(self, customer_id: str, items: list) -> None:
+# ... validation ...
+\`\`\`
+
+self.status = 'placed'
+self._events.append(OrderPlaced(
+
+\`\`\`python
+order_id=self.id,
+customer_id=customer_id,
+items=tuple(items),
+total_amount=self.calculate_total()
+\`\`\`
+
+))
+
+
+\`\`\`python
+def collect_events(self) -> list:
+events = list(self._events)
+\`\`\`
+
+self._events.clear()
+
+\`\`\`python
+return events
+
+# Repository saves aggregate AND publishes its events:
+class OrderRepository:
+def __init__(self, db, event_bus):
+\`\`\`
+
+self.db = db
+self.event_bus = event_bus
+
+
+\`\`\`python
+def save(self, order: Order) -> Order:
+with self.db.transaction():
+\`\`\`
+
+self.db.persist(order) # save state
+
+\`\`\`python
+events = order.collect_events() # collect events
+for event in events: # publish AFTER transaction commits
+\`\`\`
+
+self.event_bus.publish(event)
+
+\`\`\`python
+return order
+
+# WHY PUBLISH AFTER COMMIT:
+# If we publish before commit and the commit fails:
+# Other services received the event but the state was not saved
+# This creates inconsistency between what happened and what was communicated
+# Publishing after commit: if publish fails, at least the state is correct
+# Use outbox pattern for guaranteed delivery (save events to DB table,
+# separate process publishes them with at-least-once delivery guarantee)
+\`\`\``
   },
   {
     id: "18-6",
     number: "18.6",
     title: "Aggregates: Transactional Boundaries",
-    content: `An **Aggregate** is a cluster of domain objects (Entities and Value Objects) that can be treated as a single unit. It is the most misunderstood and most powerful tactical pattern in DDD.
-
-## The Root Problem: Consistency
-In a complex system, how do you ensure that all the related objects are in a valid state? If you have an \`Order\` with 10 \`OrderItems\`, and you delete an item, you might need to update the \`TotalAmount\` and check if the \`Discount\` is still valid.
-
-## The Aggregate Solution
-Every Aggregate has a **Root Entity** (the "Aggregate Root").
-1. **The Gatekeeper:** All external access to the aggregate must go through the Root. You cannot "reach in" and modify an \`OrderItem\` directly.
-2. **Transactional Boundary:** When you save an Aggregate to the database, the *entire cluster* must be saved as a single transaction.
-3. **Invariants:** The Aggregate Root is responsible for enforcing all business rules (invariants) within the cluster.
-
-## Example: The "Car" Aggregate
-- **Root:** \`Car\`
-- **Internals:** \`Engine\`, \`Wheel\`, \`Piston\`.
-You don't tell a \`Piston\` to fire. You tell the \`Car\` to \`start()\`. The Car then manages its internal components to ensure they are all in the correct state.
-
-Aggregates prevent the "Anemic Domain Model" (where objects are just data bags) by encapsulating logic and enforcing consistency boundaries.`
+    content: `UBIQUITOUS LANGUAGE: Interview a domain expert (or use a business domain you understand well: e-commerce, banking, healthcare). Extract 20 domain terms. For each: write the definition in domain language, create the Python class or function using that exact term. Run a 'language test': can a business expert read your class names and method names and understand what they do?
+BOUNDED CONTEXTS: Design bounded contexts for an online marketplace (seller, buyer, payment, shipping, catalog, review). Draw the context map showing relationships. For the 'Product' concept: show how it is modeled differently in the Catalog context (description, images, SEO) vs the Inventory context (stock level, warehouse location) vs the Order context (price at time of purchase, quantity).
+AGGREGATE DESIGN: Design the BankAccount aggregate. Operations: open, deposit, withdraw, close, freeze. Invariants: balance never negative, closed accounts cannot be operated, frozen accounts cannot withdraw. Implement with domain events for every state change. Write tests verifying all invariants are enforced.
+VALUE OBJECTS: Implement Money, EmailAddress, PhoneNumber, PostalCode, and Percentage as value objects. Each must: be immutable, validate on construction, implement equality by value, and have relevant operations. Show that invalid values (negative money, invalid email format) are rejected at construction time.
+DOMAIN EVENTS + OUTBOX: Implement the outbox pattern for guaranteed domain event delivery. When an aggregate is saved, events are written to an outbox table in the same transaction. A separate background process reads the outbox and publishes events to a message broker, marking them as published. Show that this survives: process crash after DB commit but before publish, and duplicate publish (idempotent consumers).
+Chapter 18 — Ten DDD Truths
+Ubiquitous Language is the most important DDD concept. Code must use the same terms as business conversations. When language changes, code changes.
+Bounded Contexts prevent the god model. The same concept (Customer, Product) means different things in different contexts. Model them differently.
+The Anti-Corruption Layer protects your model from other contexts' models. Translate at the boundary — never let foreign models pollute your domain.
+Entities have identity — they are the same entity even if attributes change. Value objects have no identity — equal attributes mean equal objects.
+Value objects must be immutable. Instead of modifying a value object, replace it with a new one. This prevents aliasing bugs.
+Aggregates enforce invariants. All operations that could violate an invariant go through the aggregate root — never directly to child objects.
+Aggregate boundaries should be transaction boundaries. If two objects must change together atomically, they belong in the same aggregate.
+Domain Events capture what happened in the business domain. Named in past tense, immutable, containing all relevant context.
+Publish domain events AFTER the transaction commits. Publishing before creates inconsistency if the transaction rolls back.
+DDD is most valuable for complex domains. For simple CRUD applications, the full DDD weight is over-engineering. Apply tactical patterns selectively.`
   },
   {
     id: "18-7",
