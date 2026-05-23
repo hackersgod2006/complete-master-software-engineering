@@ -5,208 +5,418 @@ export const CH09_SECTIONS: Section[] = [
     id: "9-1",
     number: "9.1",
     title: "Code Is Communication: The Cognitive Science Basis",
-    content: `Code is rarely written once and never read again. In fact, industry studies suggest the ratio of time spent reading vs. writing code is well over **10:1**. This fundamental reality shifts our primary goal from "making it work" to "making it communicable." 
+    content: `Excellent code is not clever code. It is not the shortest code. It is not the fastest code. It is code that communicates its intent so clearly that any engineer on your team can read it, understand it, modify it safely, and extend it confidently — including yourself six months from now when you have forgotten everything you knew when you wrote it.
+This definition has a precise engineering consequence: excellent code minimizes the total cost of ownership over its lifetime. Writing code takes hours. Maintaining code takes years. Code that takes twice as long to write but half as long to understand on every subsequent reading pays back that investment within the first month of production. The principles in this chapter are the distilled wisdom of thousands of engineers across decades of production systems.
 
-## The Socio-Technical Nature of Code
-We often view programming as a purely technical act—instructing a processor. However, unless you are writing machine code for a one-off probe heading into deep space, your code will be maintained, debugged, and refactored by humans. Code is a **shared mental model** represented in text. When you write code, you are attempting to transmit a complex abstract concept from your brain into the brain of another engineer (or your future self).
 
-## The Theory of Mind in Engineering
-Effective communication requires an understanding of the receiver's state of mind. In cognitive science, this is related to **Theory of Mind**—the ability to attribute mental states to others. Excellent code anticipates the reader's confusion. It provides landmarks, uses familiar patterns, and avoids "clever" tricks that require a high degree of local context to decipher.
-
-## Communication Efficiency
-In information theory, we look at the signal-to-noise ratio. In code:
-- **Signal**: The logic, business rules, and intent.
-- **Noise**: Boilerplate, obfuscated naming, inconsistent formatting, and unnecessary complexity.
-
-Excellent code maximizes signal. When a developer reads a well-written function, they should grasp its purpose within seconds, not minutes. If the reader has to "play computer" in their head to understand what happens next, the communication has failed.
-
-| Attribute | Poor Communication (Noise) | Excellent Communication (Signal) |
-|-----------|---------------------------|----------------------------------|
-| Intent    | Hidden behind symbols     | Explicit and readable            |
-| Context   | Requires global knowledge | Contained and local              |
-| Logic     | Deeply nested/complex     | Linear and predictable           |
-
-As we will see in the following sections, the anatomy of excellent code is built upon a foundation of respecting the human reader's cognitive limits.`
+---`
   },
   {
     id: "9-2",
     number: "9.2",
     title: "The Cognitive Load Framework: Working Memory and Code",
-    content: `To write excellent code, we must understand the hardware it runs on: the human brain. Specifically, we must design for the limitations of **Working Memory**.
-
-## The 7 ± 2 Rule
-Cognitive psychologist George Miller famously suggested that the human brain can hold roughly 7 (plus or minus 2) "chunks" of information in working memory at once. In programming, a "chunk" might be a variable name, a loop condition, or an inherited class property. When code requires a developer to keep track of 15 different variables across 200 lines, the working memory **overflows**, and the developer loses the thread.
-
-## Types of Cognitive Load
-In **Cognitive Load Theory**, we categorize mental effort into three types:
-1. **Intrinsic Load**: The inherent difficulty of the problem itself (e.g., a complex mathematical algorithm).
-2. **Extraneous Load**: Mental effort spent on things that don't help solve the problem (e.g., bad naming, poor formatting, deep nesting).
-3. **Germane Load**: The effort spent on building a permanent schema of understanding.
-
-Our goal as engineers is to **minimize extraneous load** so that the reader can devote their limited mental resources to the intrinsic and germane loads.
-
-## Strategies for Reducing Load
-- **Encapsulation**: Hide details that aren't relevant to the current level of abstraction.
-- **Linearity**: Ensure code flows top-to-bottom. Avoid jumps (GOTO) or complex non-linear event chains where possible.
-- **Small Scopes**: Keep variables close to where they are used. If a variable is defined at the top of a 100-line function but used only at the bottom, it occupies a "slot" in working memory for the entire duration.
+    content: `Naming is the act of giving variables, functions, classes, and modules names that reveal intent, purpose, and behavior. Good names make code almost self-documenting. Bad names make code impossible to understand without tracing every value at runtime. The cognitive cost of bad names across a large codebase is enormous — engineers spend more time decoding names than reading logic.
 
 \`\`\`python
-# High Cognitive Load
-def process_data(data):
-    a = 10 # Why is this here?
-    # ... 50 lines of unrelated logic ...
-    res = data * a # Now I have to remember 'a' from way back
-    return res
+# RULE 1: Names must reveal intent
+# BAD: reveals nothing
+d = 86400
+def calc(x, y): return x * y / d
+data = get_stuff()
 
-# Low Cognitive Load
-def process_data(data):
-    # ... logic ...
-    MULTIPLIER = 10
-    return data * MULTIPLIER
+# GOOD: reveals everything
+SECONDS_PER_DAY = 86400
+def calculate_daily_rate(total_amount, num_days):
+return total_amount * num_days / SECONDS_PER_DAY
+active_users = fetch_users_with_active_subscriptions()
+
+# RULE 2: Booleans must be predicates
+# BAD: active, check, flag, enabled_status
+# GOOD: is_active, has_valid_email, can_write, should_retry
+
+# RULE 3: Functions must be verb phrases
+# BAD: user_data(), email(), cleanup()
+# GOOD: fetch_user_by_id(), send_confirmation_email(), purge_expired_tokens()
+
+# RULE 4: Avoid noise words that add nothing
+# BAD: user_info_data, account_object, the_list, process_manager
+# GOOD: user_profile, account, items, processor
+
+# RULE 5: Magic numbers must be named constants
+# BAD:
+if retries > 3:
 \`\`\`
 
-By respecting these limits, we ensure that our code remains maintainable even as the system's complexity grows.`
+time.sleep(0.5)
+
+
+\`\`\`python
+# GOOD:
+MAX_RETRY_ATTEMPTS = 3
+RETRY_BACKOFF_SECONDS = 0.5
+if retries > MAX_RETRY_ATTEMPTS:
+\`\`\`
+
+time.sleep(RETRY_BACKOFF_SECONDS)
+
+
+\`\`\`python
+# RULE 6: Name length proportional to scope
+# Short scope (loop body): i, emp, doc — fine
+# Module scope: full_time_employee_monthly_report — necessary
+
+# RULE 7: Use domain language consistently
+# If business calls them 'customers' use customer everywhere.
+# Mixing customer/user/client/account for same concept creates
+# a translation layer in every reader's brain.
+\`\`\`
+
+
+Anti-Pattern
+Bad Example
+Problem
+Fix
+Generic names
+data, info, stuff, temp
+Reveals nothing about contents
+Name what it contains: invoice_total, retry_count
+Misleading names
+
+\`\`\`python
+account_list = {}
+\`\`\`
+
+Dict named list causes wrong mental model
+accounts_by_id — shows structure and access pattern
+Negated booleans
+
+\`\`\`python
+if not is_not_disabled
+\`\`\`
+
+Double negation requires conscious parsing
+
+\`\`\`python
+if is_enabled — always prefer positive form
+\`\`\`
+
+Abbreviations
+usr, evt, cfg, prc
+Save keystrokes, cost hours reading
+user, event, config, process — IDEs autocomplete
+Overloaded verbs
+
+\`\`\`python
+process(), handle(), manage()
+\`\`\`
+
+Used for too many different things
+
+\`\`\`python
+process_payment(), handle_auth_failure()
+\`\`\`
+
+Implementation in name
+user_linked_list
+Couples name to implementation detail
+users — change impl without renaming callers
+
+
+---`
   },
   {
     id: "9-3",
     number: "9.3",
     title: "Naming: The Most Underrated Engineering Skill",
-    content: `Phil Karlton famously said, "There are only two hard things in Computer Science: cache invalidation and naming things." While often quoted as a joke, it reflects a deep truth: naming is the primary way we establish **meaning** in a machine-readable world.
+    content: `A function is the fundamental unit of abstraction. A well-designed function does exactly one thing, does it completely, and does it well. This sounds simple. It requires constant discipline to achieve and maintain as code evolves under pressure.
 
-## The Power of Names
-Names serve as a "shorthand" for complex concepts. A well-chosen name like \`RetryPolicy\` instantly brings to mind a whole set of behaviors, constraints, and intentions. A poor name like \`Handler\` or \`Manager\` is a "vague-word" that provides no specific information, forcing the reader to dive into the implementation to understand what it actually does.
+### 9.3.1 Single Responsibility
 
-## Name Density vs. Clarity
-There is a common misconception that shorter names are better because they are faster to type. This is a relic of 1970s compilers and low-resolution monitors. Modern IDEs handle autocompletion perfectly. Your goal is **clarity**, not brevity.
 
-- **Bad**: \`d = 86400\`
-- **Better**: \`seconds_per_day = 86400\`
-- **Best**: \`SECONDS_IN_A_DAY = 86,400\`
-
-## The Reveal of Intent
-A name should tell you **why** it exists, **what** it does, and **how** it is used. If a name requires a comment to explain it, the name has failed.
-
-\`\`\`javascript
-// Bad
-let elapsed; // elapsed time in days
-
-// Good
-let daysSinceCreation;
-let daysSinceModification;
-let fileAgeInDays;
+\`\`\`python
+# VIOLATION: one function with six responsibilities
+def process_order(order_id, user_id):
+order = db.get_order(order_id) # 1. fetch
+if not order: raise ValueError() # 2. validate
+payment = stripe.charge(order.total) # 3. charge
 \`\`\`
 
-Naming is not just about aesthetic preference; it is about **reducing the search space** for the next developer. When names are precise, developers can navigate a codebase by searching for concepts rather than tracing every line of execution.`
+db.update(order_id, status='paid') # 4. record
+
+\`\`\`python
+send_email(user_id, order) # 5. notify
+update_inventory(order.items) # 6. inventory
+
+# Problems: cannot test payment without real database,
+# cannot test email without charging a card,
+# email failure prevents inventory update,
+# cannot reuse any individual step elsewhere.
+
+# REFACTORED: each function does exactly one thing
+def fetch_pending_order(order_id: int):
+order = db.get_order(order_id)
+if not order: raise OrderNotFoundError(order_id)
+if order.status != 'pending':
+raise InvalidOrderStateError(order_id, order.status)
+return order
+
+def charge_order(order, user):
+return stripe.charge(user.card_token, order.total_cents)
+
+def record_payment(order, payment):
+with db.transaction():
+\`\`\`
+
+db.update_order_status(order.id, 'paid')
+db.insert_transaction(order.id, payment)
+
+
+\`\`\`python
+def process_order(order_id: int, user_id: int) -> dict:
+# Orchestrates — reads like a business process
+order = fetch_pending_order(order_id)
+user = fetch_user(user_id)
+payment = charge_order(order, user)
+if not payment.success:
+raise PaymentError(payment.error_message)
+record_payment(order, payment)
+decrement_inventory(order.items)
+send_order_confirmation(user, order)
+return {'status': 'success', 'order_id': order_id}
+
+# NOW: each function independently testable, reusable, readable
+\`\`\`
+
+### 9.3.2 Function Arguments and Command-Query Separation
+
+
+\`\`\`python
+# MINIMIZE ARGUMENTS: 0=ideal, 1=good, 2=acceptable, 3=questionable, 4+=wrong
+
+# BAD: 7 arguments
+def create_user(first_name, last_name, email, password, role, dept, is_active): ...
+
+# GOOD: parameter object groups related data with built-in validation
+from dataclasses import dataclass
+
+@dataclass
+class CreateUserRequest:
+\`\`\`
+
+first_name: str
+last_name: str
+email: str
+password: str
+role: str = 'viewer'
+department: str = 'general'
+is_active: bool = True
+
+
+\`\`\`python
+def __post_init__(self):
+if '@' not in self.email:
+raise ValueError(f'Invalid email: {self.email}')
+if len(self.password) < 8:
+raise ValueError('Password must be at least 8 characters')
+
+def create_user(request: CreateUserRequest) -> 'User': ...
+
+# AVOID FLAG ARGUMENTS (boolean controlling behavior):
+# BAD: render_page(42, False) — what does False mean?
+def render_page(page_id, use_cache=True): ...
+
+# GOOD: two named functions
+def render_page(page_id: int) -> str: ...
+def render_page_bypass_cache(page_id: int) -> str: ...
+
+# COMMAND-QUERY SEPARATION:
+# Functions either modify state (commands) OR return data (queries).
+# Never both. This eliminates a huge class of subtle bugs.
+
+# VIOLATION: query with side effect
+def get_next_id(counter_name: str) -> int:
+value = db.get(counter_name)
+\`\`\`
+
+db.set(counter_name, value + 1) # SIDE EFFECT in a query!
+
+\`\`\`python
+return value
+
+# CORRECT: separate command and query
+def get_current_id(counter_name: str) -> int:
+return db.get(counter_name) # pure query
+
+def allocate_next_id(counter_name: str) -> int:
+# Explicitly named as an allocation (command that returns result)
+return db.atomic_increment(counter_name)
+\`\`\``
   },
   {
     id: "9-4",
     number: "9.4",
     title: "Naming Rules: Variables, Functions, Classes, Booleans, Collections",
-    content: `Naming is an art, but it is an art guided by strict heuristics. Following these rules creates a predictable environment for the reader.
+    content: `\`\`\`python
+# THE RULE: comments explain WHY, code explains WHAT and HOW
 
-## Variables and Constants
-- **Variables**: Use nouns that describe the data (\`userAccount\`, \`totalPrice\`).
-- **Constants**: Use SCREAMING_SNAKE_CASE for truly immutable, global values (\`MAX_RETRIES\`, \`API_TIMEOUT_MS\`).
+# BAD: restates the code (zero information added)
+\`\`\`
 
-## Functions and Methods
-Functions are actions. They should almost always start with a **verb**.
-- \`calculateTotal()\`
-- \`fetchUserData()\`
-- \`isValidEmail()\`
+i += 1 # increment i
 
-Avoid generic verbs like \`do\`, \`process\`, or \`handle\` unless the context is genuinely generic.
+\`\`\`python
+users = [] # create empty list
 
-## Booleans
-Boolean names should be framed as **questions** that return true or false. Use prefixes like \`is\`, \`has\`, \`can\`, or \`should\`.
-- \`isActive\`, \`hasPermissions\`, \`shouldRetry\`.
-- **Anti-pattern**: \`status = true\`. What does "true" mean for a status? Use \`isComplete = true\` instead.
+# BAD: lies or goes stale
+# Get the user by email
+user = db.get_user_by_id(user_id) # comment says email, code says id
 
-## Collections
-Names for arrays, lists, or sets should be **plural**.
-- \`users\`, \`pendingOrders\`, \`errorMessages\`.
-- If the type is specialized, you can include it: \`userQueue\`, \`idMap\`.
+# GOOD: explains WHY that code cannot express
 
-## Classes
-Classes should be **nouns** or **noun phrases**. Avoid "God-object" suffixes like \`Manager\`, \`Processor\`, or \`Helper\`. If you find yourself needing those, your class likely has too many responsibilities.
-- \`UserAuthenticator\` is better than \`UserHelper\`.
-- \`PriceCalculator\` is better than \`PriceProcessor\`.
+# We use 37-second timeout because upstream payment processor
+# guarantees response within 30 seconds. Extra 7 seconds accounts
+# for network jitter observed in production (P99 = 34s).
+PAYMENT_TIMEOUT_SECONDS = 37
 
-| Type | Pattern | Examples |
-|------|---------|----------|
-| Variable | Noun | \`customerEmail\` |
-| Function | Verb | \`saveProfile()\` |
-| Boolean | Predicate | \`isLoggedIn\` |
-| Class | Noun | \`DatabaseConnection\` |
+# bcrypt intentionally runs slowly to resist brute-force attacks.
+# Do NOT replace with a faster hash — that is a security vulnerability.
+hashed_password = bcrypt.hashpw(password, bcrypt.gensalt(rounds=12))
 
-Consistent naming rules act as a grammar for your codebase, allowing readers to infer the type and purpose of an identifier without looking at its definition.`
+# DOCSTRINGS: always for public APIs
+def calculate_compound_interest(
+\`\`\`
+
+principal: float,
+annual_rate: float,
+years: int,
+compounds_per_year: int = 12
+) -> float:
+'''
+Calculate compound interest using standard formula.
+
+Args:
+principal: Initial amount in dollars.
+annual_rate: Annual rate as decimal (0.05 = 5%).
+years: Number of years to compound.
+compounds_per_year: Frequency (default: monthly).
+
+Returns:
+Final amount after compound interest.
+
+Raises:
+ValueError: If principal or rate is negative.
+
+Example:
+>>> calculate_compound_interest(1000, 0.05, 10)
+1647.009...
+'''
+
+\`\`\`python
+if principal < 0: raise ValueError('Principal must be non-negative')
+if annual_rate < 0: raise ValueError('Rate must be non-negative')
+return principal * (1 + annual_rate/compounds_per_year) ** (compounds_per_year * years)
+\`\`\``
   },
   {
     id: "9-5",
     number: "9.5",
     title: "The Vocabulary of Your Domain: Ubiquitous Language in Code",
-    content: `The greatest source of naming inspiration shouldn't be a dictionary; it should be the **business domain**. This concept, popularized by Eric Evans in *Domain-Driven Design*, is known as **Ubiquitous Language**.
+    content: `\`\`\`python
+# HIGH COHESION: every method belongs together logically
+# LOW COUPLING: minimal dependencies on other classes
 
-## Why Domain Language Matters
-In many software projects, there is a "translation gap" between what the business stakeholders say and what the developers write.
-- Business: "When the *Subscriber*'s *Grace Period* ends, we should *Suspend* the account."
-- Code: \`if (user.days > 30) { user.status = 2; }\`
+# BAD: low cohesion (unrelated responsibilities in one class)
+class UserManager:
+def create_user(self): ...
+def send_email(self): ... # email is not a user concern
+def generate_report(self): ... # reporting is not user management
+def format_csv(self): ... # CSV is not user management
 
-The code above is "mentally expensive" because the developer must remember that \`days > 30\` means "Grace Period ended" and \`status = 2\` means "Suspended."
+# GOOD: high cohesion, single responsibility per class
+class UserRepository:
+\`\`\`
 
-## Building the Language
-Excellent code uses the same terms in the source code that are used in the requirements and by the users.
-- Use \`Subscriber\` instead of \`User\`.
-- Use \`GracePeriod\` instead of \`expiryBuffer\`.
-- Use \`suspend()\` instead of \`deactivate()\`.
+'''Handles persistence of User entities only.'''
 
-## Avoiding Technical Leakage
-Try to avoid naming things based on their technical implementation if a domain term exists.
-- **Leakage**: \`UserSQLRow\`, \`EmailListArray\`.
-- **Domain Focus**: \`UserProfile\`, \`Recipients\`.
+\`\`\`python
+def create(self, user): ...
+def find_by_id(self, user_id): ...
+def find_by_email(self, email): ...
+def update(self, user): ...
+def delete(self, user_id): ...
 
-The technical details (that it's a SQL row or an array) are usually visible via the type system or IDE. The **intent** (that it represents a profile or recipients) is what's truly valuable.
+class EmailService:
+\`\`\`
 
-By using Ubiquitous Language, the code becomes a living document of the business logic. A non-technical stakeholder should almost be able to read your high-level logic and verify it's correct. This reduces the risk of "lost in translation" bugs that cost millions in enterprise software.`
+'''Handles sending transactional emails only.'''
+
+\`\`\`python
+def send_welcome(self, user): ...
+def send_password_reset(self, user, token): ...
+def send_order_confirmation(self, user, order): ...
+
+# LAW OF DEMETER: talk to friends, not strangers
+# Call methods only on: self, arguments, objects you create, your fields
+
+# BAD: chaining through unowned objects
+def get_city(order):
+return order.customer.address.city.name # knows too much
+
+# GOOD: ask the object for what you need
+def get_city(order):
+return order.get_customer_city() # order exposes what callers need
+
+# OPEN-CLOSED PRINCIPLE:
+# Open for extension, closed for modification.
+# Add behavior by adding new code, not changing existing code.
+
+# BAD: adding new payment method requires modifying existing function
+def process_payment(order, method):
+if method == 'stripe': ...
+elif method == 'paypal': ...
+elif method == 'crypto': ... # had to modify existing function
+
+# GOOD: each payment method is a separate class
+class PaymentProcessor: # abstract interface
+def charge(self, amount_cents: int) -> PaymentResult: ...
+
+class StripeProcessor(PaymentProcessor):
+def charge(self, amount_cents): return stripe.charge(amount_cents)
+
+class PayPalProcessor(PaymentProcessor):
+def charge(self, amount_cents): return paypal.charge(amount_cents)
+
+# Adding new method: just add new class, zero changes to existing code
+class CryptoProcessor(PaymentProcessor):
+def charge(self, amount_cents): return crypto.charge(amount_cents)
+\`\`\``
   },
   {
     id: "9-6",
     number: "9.6",
     title: "Functions: The Atomic Unit of Design",
-    content: `If naming is the vocabulary of code, functions are the **sentences**. They are the smallest unit of executable logic that can be named and reused. The quality of your functions determines the "granularity" of your system.
+    content: `CODE REVIEW: Find an open-source Python project with 500+ stars. Read 500 lines of its source code. Find: 3 naming violations, 2 functions doing more than one thing, 1 comment that could be eliminated by renaming. Write a detailed code review with specific suggestions for each.
+REFACTORING: Take a 50-line function that reads a CSV, validates each row, converts currency, calculates totals, formats as a report string, and prints it. Refactor into at least 6 separate functions. Apply all 7 naming rules. Apply single responsibility to every function.
+NAMING AUDIT: Take any 200-line Python program you have written. Apply the 7 naming rules to every variable, function, and class. Count how many names you rename. Measure before-and-after reading time with a colleague.
+PARAMETER OBJECTS: Find 3 functions with 4+ arguments in any codebase. For each, design a dataclass with appropriate validation in __post_init__. Show how call sites become cleaner.
+OPEN-CLOSED EXERCISE: Refactor a function using if/elif chains for type dispatch into the strategy pattern using a class hierarchy. Add a new type without touching the existing classes.
+Chapter 9 — Ten Truths About Excellent Code
+Names must reveal intent. If a name requires a comment to explain it, the name is wrong. Rename until the comment becomes unnecessary.
+Boolean names must be predicates: is_active, has_permission, can_retry. Negated booleans force double parsing — always prefer positive form.
+Functions do one thing. If you describe a function with 'and' (validates and saves), it does too many things. Split it.
+Minimize function arguments. Four or more almost always indicate a missing parameter object or a function doing too much.
+Flag arguments (boolean parameters) are a design smell. They signal the function has two behaviors. Split into two named functions.
+Command-Query Separation: functions either modify state or return data. Functions that do both are a source of subtle bugs.
+Comments explain WHY, not WHAT. Code that needs a comment to explain what it does should be rewritten until the code explains itself.
+High cohesion: every method in a class belongs together logically. Low coupling: minimal dependencies on other classes.
+The Law of Demeter: only call methods on objects you own, receive as arguments, or create. Deep chaining couples you to internal structure.
+The Boy Scout Rule: leave every function cleaner than you found it. Excellent code is not written once — it is continuously improved.
 
-## Small is Beautiful
-The first rule of functions is that they should be **small**. The second rule is that they should be smaller than that. While there is no hard limit, a function that exceeds 20-30 lines often suffers from "doing too much." 
+CHAPTER 10
+ERROR HANDLING: THE ARCHITECTURE OF FAILURE
+How to Design Systems That Fail Gracefully, Recover Automatically, and Never Silently Corrupt Data
 
-Small functions are:
-1. **Easier to Read**: They fit on one screen.
-2. **Easier to Test**: They have fewer paths (lower cyclomatic complexity).
-3. **Easier to Reuse**: They perform one specific task that might be needed elsewhere.
-
-## One Level of Abstraction
-Excellent functions maintain a **Single Level of Abstraction (SLA)**. You shouldn't mix high-level business logic with low-level details (like regex or bit manipulation) in the same function.
-
-\`\`\`javascript
-// Bad: Mixed Abstractions
-function notifyUser(user) {
-    // High level
-    if (user.isEligible()) {
-        // Low level detail: building a string
-        const msg = "Hello " + user.name.split(' ')[0].toUpperCase();
-        // Middle level: network I/O
-        SMTPClient.send(user.email, msg);
-    }
-}
-
-// Good: Consistent Abstractions
-function notifyUser(user) {
-    if (user.isEligible()) {
-        const message = formatGreeting(user);
-        sendEmail(user.email, message);
-    }
-}
-\`\`\`
-
-The "Good" version reads like a story. Each line calls another function at a similar level of "importance." This makes the code navigable. You can choose to drill down into \`formatGreeting\` if you care about the implementation, or skip it if you just care about the notification flow.`
+"There are two ways to write error-free programs; only the third one works." — Alan Perlis`
   },
   {
     id: "9-7",
