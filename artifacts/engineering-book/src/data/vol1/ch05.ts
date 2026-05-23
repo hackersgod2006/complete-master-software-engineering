@@ -5,236 +5,607 @@ export const CH05_SECTIONS: Section[] = [
     id: "5-1",
     number: "5.1",
     title: "The Philosophy of Data Structures",
-    content: `Data structures are not merely ways to store bits; they are the **physical architecture of logic**. In software engineering, the structure of your data dictates the performance, scalability, and even the existence of your algorithms. As Fred Brooks famously noted in *The Mythical Man-Month*, "Show me your flowcharts and conceal your tables, and I shall continue to be mystified. Show me your tables, and I won't usually need your flowcharts; they'll be obvious."
-
-## Data as the Driver
-Every piece of software is essentially a transformation engine: it takes input data, processes it, and produces output data. The "processing" part—the algorithm—is limited by how the data is organized. If you store a million records in a simple list and need to find one by ID, you are forced into an $O(n)$ search. If you store them in a Hash Map, you find them in $O(1)$. The difference isn't just a bit of speed; it's the difference between a responsive system and a crashed one.
-
-## The Memory Hierarchy Constraint
-A fundamental philosophy of modern data structures is acknowledging the **von Neumann bottleneck** and the memory hierarchy. CPU registers operate in sub-nanosecond cycles, L1 cache in ~1ns, but Main Memory (RAM) takes ~100ns. A data structure that requires frequent "pointer chasing" across RAM (like a fragmented Linked List) will be significantly slower than a contiguous structure (like an Array) that utilizes **Spatial Locality**, even if their theoretical time complexities are identical.
-
-## Abstract Data Types (ADTs) vs. Data Structures
-It is vital to distinguish between the **Abstract Data Type (ADT)**—the "what" (e.g., a Stack, a Queue, a Set)—and the **Data Structure**—the "how" (e.g., an Array-based Stack vs. a Linked-List-based Stack). The ADT defines the interface and behavior, while the Data Structure defines the implementation and the performance trade-offs.
-
-| Feature | ADT (Interface) | Data Structure (Implementation) |
-| :--- | :--- | :--- |
-| Focus | Behavior and Operations | Memory layout and Complexity |
-| Example | List | Array, Linked List |
-| Goal | Encapsulation | Performance Optimization |
-
-Choosing a data structure is an exercise in **trade-off management**. You are trading space for time, or write-speed for read-speed. There is no "best" structure, only the most appropriate one for your specific constraints.`
+    content: `A data structure is a principled organization of data enabling efficient access, modification, and reasoning. The choice of data structure is often the single most impactful engineering decision in a program — more impactful than compiler optimizations, hardware upgrades, or any micro-optimization.
+The difference between O(n) and O(1) lookup is not a 10% improvement. For a million elements it is the difference between one million operations and one. No hardware compensates for the wrong data structure. Every data structure embodies trade-offs across four dimensions: time complexity, space overhead, access pattern requirements, and mutability. The engineer matches structure strengths to actual access patterns.`
   },
   {
     id: "5-2",
     number: "5.2",
     title: "Choosing the Right Structure: The Four Dimensions",
-    content: `When a senior engineer selects a data structure, they evaluate it across four critical dimensions. This systematic approach prevents the common mistake of "using a Hash Map for everything" or over-engineering a simple problem.
+    content: `The array's defining property: elements stored in contiguous memory, accessible in O(1) time by index. Address = base + index × element_size. No pointer following, no searching, just arithmetic. Every other data structure is either built from arrays or pays for flexibility by losing this cache efficiency.
 
-## 1. Time Complexity (Operation Profile)
-You must analyze the frequency of operations. Is your application **read-heavy**, **write-heavy**, or does it require **frequent deletions**?
-- **Search**: Do you need $O(1)$ lookup by key (Hash Table) or $O(\log n)$ range queries (B-Tree)?
-- **Insertion/Deletion**: Is it always at the end ($O(1)$ for dynamic arrays) or in the middle ($O(1)$ for linked lists if you have the pointer)?
+### 5.2.1 Memory Layout and Cache Behavior
 
-## 2. Space Complexity (Memory Overhead)
-Memory is finite. A Linked List has significant overhead because each node requires extra bytes for pointers (8 bytes for a 64-bit address). A 4-byte integer in a linked list effectively takes 12-16 bytes. In contrast, a bitset can represent a set of booleans with 1/8th the space of a byte array.
 
-## 3. Data Volatility and Size
-- **Static vs. Dynamic**: If the data size is known at compile time, a static array is unbeatable.
-- **Persistence**: Do you need to keep previous versions of the data? Functional data structures (Immutable) are designed for this.
+\`\`\`python
+import sys, numpy as np, array as arr_mod
 
-## 4. Access Patterns and Cache Locality
-Modern CPUs use **prefetching**. When you access \`arr[i]\`, the CPU loads the next few elements into the cache automatically. Structures that store data contiguously (Arrays, Struct of Arrays) benefit from this. Structures that scatter data (Linked Lists, Trees with fragmented nodes) suffer from **Cache Misses**, which can be 100x slower than a cache hit.
+# PYTHON LIST: array of pointers to separate Python objects
+lst = [1, 2, 3, 4, 5]
+# Memory layout:
+# list object → [ptr0, ptr1, ptr2, ptr3, ptr4]
+# ↓ ↓ ↓ ↓ ↓
+# int(1) int(2) int(3) int(4) int(5) (heap objects ~28B each)
+# Total: ~236 bytes for 5 integers
+print(f'list: {sys.getsizeof(lst)} bytes header + {5*8} ptr bytes')
 
-## The "Fit-for-Purpose" Test
-Consider a high-frequency trading system. The data structure for the "Order Book" must support $O(\log n)$ insertions but also $O(1)$ access to the "best price." A combination of a **Red-Black Tree** and a **Hash Map** might be necessary to satisfy both constraints simultaneously. This is known as a **Hybrid Data Structure**.`
+# ARRAY MODULE: compact typed storage
+int_arr = arr_mod.array('i', [1,2,3,4,5]) # 'i' = signed int32
+print(f'array: {sys.getsizeof(int_arr)} bytes total') # ~64 bytes
+# Memory: [1|2|3|4|5] — 20 bytes of actual data, no per-element overhead
+
+# NUMPY: contiguous, typed, SIMD-vectorizable
+np_arr = np.array([1,2,3,4,5], dtype=np.int32)
+print(f'numpy: {np_arr.nbytes} bytes data') # 20 bytes exactly
+# numpy is 10-100x faster for bulk operations due to SIMD + cache locality
+
+# STRUCT OF ARRAYS vs ARRAY OF STRUCTS:
+
+# Array of Structs (AoS) — natural OOP layout:
+# Memory: [x0,y0,z0,vx0,vy0, x1,y1,z1,vx1,vy1, x2,y2,z2,vx2,vy2, ...]
+# Accessing all x values: stride = 5 floats = 20 bytes between each x
+# Poor SIMD utilization, poor cache line usage for column operations
+particles_aos = np.zeros(1_000_000, dtype=[
+\`\`\`
+
+('x','f4'),('y','f4'),('z','f4'),('vx','f4'),('vy','f4')])
+
+
+\`\`\`python
+# Struct of Arrays (SoA) — data-oriented layout:
+# Memory: [x0,x1,x2,...,xN] [y0,y1,...,yN] [z0,z1,...,zN]
+# Accessing all x values: sequential, cache-friendly, SIMD-vectorizable
+xs = np.zeros(1_000_000, dtype=np.float32) # all x values contiguous
+ys = np.zeros(1_000_000, dtype=np.float32)
+
+# SoA bulk sum is 2-4x faster for column operations
+# Used by: Unity ECS, game physics engines, columnar databases (Parquet)
+
+# DYNAMIC ARRAY GROWTH — amortized O(1) append:
+# Doubling strategy: when full, allocate 2x and copy all elements
+# Total copies for n appends: 1+2+4+...+n/2 = n-1
+# Amortized cost per append: O(n)/n = O(1)
+
+# Python list actual growth: 0,4,8,16,25,35,46,58,72,88,106...
+# Not pure doubling — empirically tuned for common sizes
+# append(): O(1) amortized pop(): O(1)
+# insert(i): O(n) pop(i): O(n)
+# lst[i]: O(1) sort(): O(n log n) Timsort
+# x in lst: O(n) linear scan len(): O(1)
+\`\`\``
   },
   {
     id: "5-3",
     number: "5.3",
     title: "Arrays: Static, Dynamic, and Multi-Dimensional",
-    content: `The **Array** is the most fundamental data structure. It represents a contiguous block of memory where each element is of a fixed size, allowing for **Constant Time Access** via the formula: \`Address = Base + Index * ElementSize\`.
+    content: `Linked lists pay O(1) for insert and delete at a known node but sacrifice cache performance. A cache miss costs 60ns versus 1ns for a cache hit — 60 times slower. This means arrays with O(n) shifting often beat linked lists with O(1) insertion at practical sizes because cache misses dominate.
 
-## Static Arrays
-A static array has a fixed size determined at allocation. In languages like C, this is a direct mapping to a segment of memory.
-\`\`\`c
-int scores[5] = {90, 85, 80, 75, 70};
-// Accessing scores[3] is exactly one addition and one multiplication at the CPU level.
+\`\`\`python
+from typing import Optional, TypeVar, Generic
+T = TypeVar('T')
+
+class Node(Generic[T]):
+def __init__(self, val: T):
 \`\`\`
 
-## Dynamic Arrays (Vectors)
-Most modern languages provide dynamic arrays (e.g., \`std::vector\` in C++, \`ArrayList\` in Java, \`Array\` in JavaScript/Python). They solve the "fixed size" problem by over-allocating memory. When the capacity is reached, the array **reallocates**:
-1. Allocate a new, larger block of memory (usually 1.5x or 2x the current size).
-2. Copy all existing elements to the new block.
-3. Free the old memory.
+self.val = val
+self.next: Optional['Node[T]'] = None
+self.prev: Optional['Node[T]'] = None
 
-## Multi-Dimensional Arrays
-There are two ways to represent a 2D array (Matrix) in memory:
-- **Row-Major Order**: Consecutive elements of a row are placed next to each other (Standard in C/C++, Python/NumPy).
-- **Column-Major Order**: Consecutive elements of a column are placed next to each other (Standard in Fortran, MATLAB).
 
-Understanding this is crucial for performance. In Row-Major order, iterating through a row is fast due to cache hits, while iterating through a column causes a cache miss for every element.
+\`\`\`python
+class DoublyLinkedList(Generic[T]):
+def __init__(self):
+\`\`\`
 
-| Access Type | Complexity |
-| :--- | :--- |
-| Indexing | $O(1)$ |
-| Search (Unsorted) | $O(n)$ |
-| Search (Sorted) | $O(\log n)$ |
-| Insertion/Deletion (Middle) | $O(n)$ |`
+self.head: Optional[Node[T]] = None
+self.tail: Optional[Node[T]] = None
+self.size = 0
+
+
+\`\`\`python
+def append(self, val: T) -> Node[T]: # O(1) — returns node!
+n = Node(val)
+if not self.tail: self.head = self.tail = n
+else:
+\`\`\`
+
+n.prev = self.tail; self.tail.next = n; self.tail = n
+self.size += 1
+
+\`\`\`python
+return n # return node for O(1) future removal
+
+def remove(self, n: Node[T]) -> None: # O(1) given the node
+if n.prev: n.prev.next = n.next
+else: self.head = n.next
+if n.next: n.next.prev = n.prev
+else: self.tail = n.prev
+\`\`\`
+
+n.next = n.prev = None; self.size -= 1
+
+
+\`\`\`python
+def move_to_front(self, n: Node[T]) -> None: # O(1)
+\`\`\`
+
+self.remove(n)
+n.next = self.head
+
+\`\`\`python
+if self.head: self.head.prev = n
+\`\`\`
+
+self.head = n; n.prev = None
+
+\`\`\`python
+if not self.tail: self.tail = n
+\`\`\`
+
+self.size += 1
+
+
+\`\`\`python
+# WHEN LINKED LISTS WIN:
+# LRU Cache: doubly-linked list + hash map = O(1) access AND eviction
+# Queue/deque: O(1) both ends (collections.deque uses linked blocks)
+# Undo/redo history: O(1) insert at current cursor position
+# OS ready queues: O(1) process insert and remove by priority
+
+# WHEN ARRAYS WIN (almost always for performance-critical code):
+# Random access required, binary search, SIMD operations,
+# iteration over all elements (array is 60x faster due to cache)
+
+# PYTHON DEQUE — correct choice for queue and stack:
+from collections import deque
+q = deque(maxlen=100) # bounded, O(1) append AND popleft
+\`\`\`
+
+q.append('right') # O(1)
+q.appendleft('left') # O(1)
+q.popleft() # O(1)
+
+\`\`\`python
+# Implemented as doubly-linked list of fixed-size blocks (~64 nodes each)
+# Better cache performance than individual node allocation
+\`\`\``
   },
   {
     id: "5-4",
     number: "5.4",
     title: "Array of Structs vs Struct of Arrays",
-    content: `When dealing with large collections of objects, the memory layout significantly impacts performance, particularly for **SIMD (Single Instruction, Multiple Data)** processing and cache efficiency.
+    content: `The hash table achieves O(1) average-case lookup, insertion, and deletion. It powers Python dict and set, Java HashMap, JavaScript objects, Go maps, Redis core structures, and virtually every in-memory index. Understanding hash tables completely — hash functions, collision resolution, load factors, pathological cases — is not optional for serious engineers.
 
-## Array of Structs (AoS)
-This is the "natural" Object-Oriented way. You have an array where each element is an instance of a class/struct.
-\`\`\`typescript
-struct Particle {
-    float x, y, z;
-    int color;
-};
-Particle particles[1000];
+### 5.4.1 Complete Open-Addressing Implementation
+
+
+\`\`\`python
+class HashTable:
+EMPTY = object() # slot never used
+DELETED = object() # tombstone: was here, now deleted
+
+def __init__(self, cap=8):
 \`\`\`
-**Pros**: High **Spatial Locality** for operations on a single object (e.g., "Get all properties of particle #5").
-**Cons**: Poor performance when you only need one property from all objects (e.g., "Update only the Y-coordinate of all particles"). The CPU fetches the \`x\`, \`z\`, and \`color\` into cache even though they aren't used.
 
-## Struct of Arrays (SoA)
-This is the "Data-Oriented Design" approach. You have one struct that contains multiple arrays.
-\`\`\`typescript
-struct ParticleSystem {
-    float x[1000];
-    float y[1000];
-    float z[1000];
-    int color[1000];
-};
+self.cap = cap; self.size = 0
+self.keys = [self.EMPTY] * cap
+self.vals = [None] * cap
+
+
+\`\`\`python
+def _probe(self, key):
+idx = hash(key) % self.cap
+first_del = -1
+for _ in range(self.cap):
+s = self.keys[idx]
+if s is self.EMPTY:
+return first_del if first_del >= 0 else idx
+elif s is self.DELETED:
+if first_del < 0: first_del = idx
+elif s == key: return idx
+idx = (idx + 1) % self.cap # linear probing
+return first_del
+
+def set(self, key, val):
+if self.size / self.cap > 0.7: # resize at 70% load
 \`\`\`
-**Pros**: Excellent for **Parallel Processing**. To update all Y-coordinates, the CPU can load a block of \`y\` values into a SIMD register and process 4, 8, or 16 values at once.
-**Cons**: Accessing all properties of a single entity requires multiple index lookups in different memory locations.
 
-## Practical Use
-In game development and high-performance computing (HPC), SoA is often preferred for "hot" update loops (physics, rendering), while AoS is used for "cold" data (UI, configuration). Modern engines often use a hybrid approach.`
+self._resize(self.cap * 2)
+
+\`\`\`python
+idx = self._probe(key)
+if self.keys[idx] in (self.EMPTY, self.DELETED):
+\`\`\`
+
+self.size += 1
+self.keys[idx] = key; self.vals[idx] = val
+
+
+\`\`\`python
+def get(self, key, default=None):
+idx = self._probe(key)
+if self.keys[idx] in (self.EMPTY, self.DELETED): return default
+return self.vals[idx]
+
+def delete(self, key):
+idx = self._probe(key)
+if self.keys[idx] in (self.EMPTY, self.DELETED): return False
+\`\`\`
+
+self.keys[idx] = self.DELETED # TOMBSTONE — never EMPTY!
+
+\`\`\`python
+# Setting EMPTY would break probe chains for other keys
+\`\`\`
+
+self.vals[idx] = None; self.size -= 1; return True
+
+
+\`\`\`python
+def _resize(self, new_cap):
+\`\`\`
+
+old_k, old_v = self.keys, self.vals
+self.cap = new_cap
+self.keys = [self.EMPTY] * new_cap
+self.vals = [None] * new_cap; self.size = 0
+
+\`\`\`python
+for k, v in zip(old_k, old_v):
+if k not in (self.EMPTY, self.DELETED): self.set(k, v)
+
+# THE HASH FLOODING ATTACK (2011):
+# Attacker crafts HTTP params where ALL keys hash to same bucket
+# O(1) expected lookup becomes O(n) worst case per parameter
+# n=1000 params: 1,000,000 comparisons per request = DoS
+# Affected: PHP, Java, Python, Ruby, Perl, ASP.NET simultaneously
+
+# FIX: randomize hash seed per process (PYTHONHASHSEED)
+# Python added this in 3.3 specifically to defeat this attack
+# hash('hello') is DIFFERENT every Python process start
+# Never serialize hash() values or rely on them across processes
+
+# HASH FUNCTION GUIDE:
+# SipHash (Python default): DoS-resistant, seeded randomly, ~1-2ns/byte
+# xxHash: fastest non-cryptographic (>40 GB/s), great distribution
+# BLAKE3: cryptographic AND fast (>2 GB/s) — new systems should use this
+# SHA-256: standard cryptographic, 400 MB/s — for signing, content addressing
+# NEVER: MD5, SHA-1 for security (broken), bad_sum_of_chars for tables
+\`\`\``
   },
   {
     id: "5-5",
     number: "5.5",
     title: "Dynamic Array: Amortized Analysis of Growth",
-    content: `Why do dynamic arrays (like Python's \`list\`) usually double in size when they run out of space? Why not just add 100 extra slots? The answer lies in **Amortized Analysis**.
+    content: `### 5.5.1 AVL Tree: Self-Balancing BST
 
-## The Cost of Reallocation
-If we grow an array by 1 every time we insert, we perform $n$ reallocations. The total number of copies for $n$ elements would be $1 + 2 + 3 + ... + n = O(n^2)$. This is a disaster.
 
-If we use a **Geometric Expansion** (doubling the size), we only reallocate $\log n$ times.
-Let's analyze the total work for $n$ insertions:
-- Most insertions are $O(1)$.
-- At $n = 2^k$, we pay $n$ to copy.
-The total cost is approximately $n + (n/2 + n/4 + n/8 ...) = n + n(1) = 2n$.
-Since $2n / n = 2$, the **Amortized Cost** per insertion is $O(1)$.
+\`\`\`python
+# AVL Tree: O(log n) guaranteed for all operations
+# Balance invariant: |height(left) - height(right)| <= 1 for every node
 
-## The Growth Factor ($\alpha$)
-- **Java ArrayList**: $\alpha = 1.5$. This is more memory-efficient and allows for potentially reusing memory blocks after a few deallocations.
-- **Python/C++ Vector**: $\alpha = 2.0$. This is faster (fewer reallocations) but more memory-intensive.
-
-## Pre-allocation
-A professional engineer always uses \`reserve()\` or provides an initial capacity if the final size is roughly known. This eliminates the $O(n)$ "spikes" in latency during growth, which is critical for real-time systems.
-
-\`\`\`cpp
-std::vector<int> data;
-data.reserve(1000000); // Prevents ~20 reallocations and millions of copies
+class AVLNode:
+def __init__(self, key, val):
 \`\`\`
 
-The takeaway: Dynamic arrays are $O(1)$ *on average*, but they have $O(n)$ "worst-case" latency on specific operations. In hard real-time systems (like flight control), dynamic arrays are often forbidden for this reason.`
+self.key = key; self.val = val
+self.left = self.right = None; self.height = 1
+
+
+\`\`\`python
+class AVLTree:
+def __init__(self): self.root = None
+def _h(self, n): return n.height if n else 0
+def _bf(self, n): return self._h(n.left) - self._h(n.right)
+def _upd(self, n): n.height = 1 + max(self._h(n.left), self._h(n.right))
+
+def _rr(self, y): # right rotation
+x = y.left; t2 = x.right
+\`\`\`
+
+x.right = y; y.left = t2
+self._upd(y); self._upd(x); return x
+
+
+\`\`\`python
+def _rl(self, x): # left rotation
+y = x.right; t2 = y.left
+\`\`\`
+
+y.left = x; x.right = t2
+self._upd(x); self._upd(y); return y
+
+
+\`\`\`python
+def _insert(self, node, key, val):
+if not node: return AVLNode(key, val)
+if key < node.key: node.left = self._insert(node.left, key, val)
+elif key > node.key: node.right = self._insert(node.right, key, val)
+else: node.val = val; return node
+\`\`\`
+
+self._upd(node); bf = self._bf(node)
+
+\`\`\`python
+if bf > 1:
+if key > node.left.key: node.left = self._rl(node.left)
+return self._rr(node)
+if bf < -1:
+if key < node.right.key: node.right = self._rr(node.right)
+return self._rl(node)
+return node
+
+def insert(self, key, val): self.root = self._insert(self.root, key, val)
+
+def search(self, key):
+n = self.root
+while n:
+if key == n.key: return n.val
+n = n.left if key < n.key else n.right
+return None
+
+# REAL-WORLD USES OF BALANCED BSTs:
+# Linux CFS scheduler: Red-Black tree of runnable threads by vruntime
+# Java TreeMap/TreeSet: Red-Black tree for sorted maps and sets
+# C++ std::map/std::set: Red-Black tree
+# Python sortedcontainers: SortedList, SortedDict, SortedSet
+# Database index structures (in-memory sorted indexes)
+\`\`\`
+
+### 5.5.2 B-Trees: The Database Engine
+
+
+\`\`\`python
+# B-TREE: designed for block I/O — each node fills one disk page
+
+# PostgreSQL B+ tree parameters:
+# Page size: 8192 bytes
+# Index entry (int4 + heap pointer): ~40 bytes
+# Keys per page: 8192 / 40 ≈ 200 keys per internal node
+
+# HEIGHT vs ROWS:
+# Height 1: 200 keys
+# Height 2: 200^2 = 40,000 keys
+# Height 3: 200^3 = 8,000,000 keys
+# Height 4: 200^4 = 1,600,000,000 keys ← 1.6 BILLION rows, 4 page reads!
+
+# Finding 1 row in 1.6 billion:
+# Without index: 1.6B row reads (sequential scan)
+# With B-tree: 4 page reads (navigate tree) + 1 heap read
+# Speedup: 320,000,000x for a single lookup
+
+# COMPOSITE INDEX RULES:
+# Index on (a, b, c):
+# WHERE a = ? YES — uses index (leftmost prefix)
+# WHERE a = ? AND b = ? YES — uses a and b
+# WHERE b = ? NO — missing leading column a
+# WHERE a = ? AND c = ? PARTIAL — uses a, skips b, cannot filter c
+# Always put high-cardinality equality columns first
+
+# COVERING INDEX (index-only scan — never reads heap):
+# CREATE INDEX idx ON orders(customer_id) INCLUDE (status, total);
+# SELECT status, total FROM orders WHERE customer_id = 42;
+# Zero heap page reads — data is entirely in the index
+# 2-3x faster for read-heavy queries on large tables
+
+# B+ TREE vs B-TREE:
+# B+ tree: data only in leaf nodes; leaves linked for range scans
+# B tree: data in all nodes; faster single lookup, no range advantage
+# ALL major databases use B+ trees: PostgreSQL, MySQL, SQLite, Oracle
+\`\`\``
   },
   {
     id: "5-6",
     number: "5.6",
     title: "Linked Lists: Singly and Doubly Linked",
-    content: `A **Linked List** is a linear collection of data elements where order is not given by their physical placement in memory but by **pointers**.
+    content: `\`\`\`python
+import heapq
+from dataclasses import dataclass, field
 
-## Singly Linked List (SLL)
-Each node contains data and a \`next\` pointer.
-- **Head**: The first node.
-- **Tail**: The last node (points to \`null\`).
-SLLs are memory-efficient for unidirectional traversal. They are the backbone of Stacks and Simple Queues.
+# Python heapq: min-heap backed by a list
+# Invariant: h[k] <= h[2k+1] and h[k] <= h[2k+2] for all k
 
-## Doubly Linked List (DLL)
-Each node contains data, a \`next\` pointer, and a \`prev\` pointer.
-- **Pros**: Can traverse in both directions. Can delete a node in $O(1)$ if you already have a pointer to it.
-- **Cons**: Consumes more memory (2 pointers per node).
-
-## The Implementation Detail: Sentinels
-To avoid "if-else" hell when dealing with empty lists or inserting at the head/tail, we use **Sentinel Nodes** (Dummy nodes).
-A DLL with sentinels looks like: \`Header <-> Node1 <-> Node2 <-> Footer\`.
-This ensures that \`node.next\` and \`node.prev\` are *always* valid pointers, simplifying the logic for \`insert\` and \`remove\` operations.
-
-\`\`\`python
-class Node:
-    def __init__(self, val):
-        self.val = val
-        self.next = None
-        self.prev = None
-
-def remove_node(node):
-    # O(1) removal in DLL
-    node.prev.next = node.next
-    node.next.prev = node.prev
+h = []
 \`\`\`
 
-## Circular Linked Lists
-The last node points back to the first. This is useful for **Round Robin Scheduling** or implementing a **Ring Buffer** where the buffer should continuously cycle.`
+heapq.heappush(h, 5); heapq.heappush(h, 1); heapq.heappush(h, 8)
+
+\`\`\`python
+print(h[0]) # O(1) peek minimum: 1
+print(heapq.heappop(h)) # O(log n) extract min: 1
+
+lst = [5,3,8,1,9,2,7]
+\`\`\`
+
+heapq.heapify(lst) # O(n) — Floyd's algorithm, NOT O(n log n)!
+
+\`\`\`python
+# Proof: work at each level = n/2^i nodes x O(i) sift each
+# Total: sum(n/2^i * i for i) = O(n) by geometric series
+
+# MAX-HEAP: negate all values
+max_h = []
+\`\`\`
+
+[heapq.heappush(max_h, -v) for v in [5,1,8,3,9]]
+
+\`\`\`python
+print(-heapq.heappop(max_h)) # 9
+
+# PRIORITY QUEUE FOR TASK SCHEDULING:
+@dataclass(order=True)
+class Task:
+\`\`\`
+
+priority: int # lower = higher priority
+name: str = field(compare=False)
+
+
+\`\`\`python
+tasks = []
+\`\`\`
+
+heapq.heappush(tasks, Task(3, 'newsletter'))
+heapq.heappush(tasks, Task(1, 'payment')) # runs first
+heapq.heappush(tasks, Task(2, 'email'))
+
+\`\`\`python
+print(heapq.heappop(tasks).name) # 'payment'
+
+# TOP-K ELEMENTS:
+def top_k(stream, k):
+heap = []
+for x in stream:
+\`\`\`
+
+heapq.heappush(heap, x)
+
+\`\`\`python
+if len(heap) > k: heapq.heappop(heap)
+return sorted(heap, reverse=True)
+
+# STREAMING MEDIAN (two heaps):
+# max-heap for lower half, min-heap for upper half
+# Keep |len(lower) - len(upper)| <= 1
+# Median = top of larger heap OR average of both tops
+
+# COMPLEXITIES:
+# heappush/pop: O(log n) h[0] peek: O(1) heapify: O(n)
+# USE FOR: Dijkstra, A*, event simulation, scheduling, top-K
+\`\`\``
   },
   {
     id: "5-7",
     number: "5.7",
     title: "When Linked Lists Actually Beat Arrays",
-    content: `In modern software interviews, candidates often dismiss Linked Lists because "Arrays are faster for the cache." While generally true, there are specific, critical scenarios where Linked Lists are superior.
+    content: `\`\`\`python
+import math
 
-## 1. Guaranteed $O(1)$ Insertion/Deletion
-An array-based list (like \`ArrayList\`) has $O(n)$ worst-case insertion (if it must shift elements). A Linked List has a hard guarantee of $O(1)$ if you have the pointer. This is vital in **Operating System Kernels** for managing task queues where latency spikes are unacceptable.
+class BloomFilter:
+def __init__(self, capacity, fp_rate):
+# Optimal bits: m = -n*ln(p) / (ln2)^2
+\`\`\`
 
-## 2. No Memory Reallocation
-Linked Lists grow gracefully. They don't require a large contiguous block of memory. If memory is heavily fragmented, you might be able to allocate 10,000 small nodes even if you cannot allocate a single contiguous array for 10,000 integers.
+self.m = int(-capacity * math.log(fp_rate) / (math.log(2)**2))
 
-## 3. Efficient Merging
-Two Linked Lists can be merged into one in $O(1)$ time simply by pointing the tail of one to the head of another. Merging two arrays is always $O(n)$.
+\`\`\`python
+# Optimal hash count: k = (m/n) * ln2
+\`\`\`
 
-## 4. Concurrent Data Structures
-Many **Lock-Free** data structures (like the Michael-Scott Queue used in Java's \`ConcurrentLinkedQueue\`) use Linked Lists. It is much easier to use atomic operations like **Compare-And-Swap (CAS)** to update a single pointer than to safely reallocate and shift an entire array in a multi-threaded environment.
+self.k = max(1, round(self.m / capacity * math.log(2)))
+self.bits = bytearray(self.m // 8 + 1)
 
-## 5. Functional Programming
-In languages like Lisp, Haskell, or Elixir, the **Singly Linked List** (the "Cons cell") is the primary structure. Because it is persistent, you can "add" an element to the head to create a new list while sharing the entire tail with the old list. This provides $O(1)$ immutability.
+\`\`\`python
+print(f'{self.m:,} bits ({self.m//8//1024:.1f} KB), {self.k} hash functions')
 
-| Feature | Array | Linked List |
-| :--- | :--- | :--- |
-| Random Access | $O(1)$ | $O(n)$ |
-| Insert/Delete at Start | $O(n)$ | $O(1)$ |
-| Memory Locality | Excellent | Poor |
-| Overhead | Low | High (Pointers) |`
+def _hashes(self, item):
+h1 = hash(item + ':1') % self.m
+h2 = hash(item + ':2') % self.m
+for i in range(self.k):
+yield (h1 + i * h2) % self.m
+
+def add(self, item):
+for h in self._hashes(item):
+\`\`\`
+
+self.bits[h // 8] |= (1 << (h % 8))
+
+
+\`\`\`python
+def might_contain(self, item) -> bool:
+return all(self.bits[h//8] & (1<<(h%8)) for h in self._hashes(item))
+# True → MIGHT be in set (false positive rate = fp_rate)
+# False → DEFINITELY NOT in set (zero false negatives ever)
+
+# 1M items, 1% false positive: ~9.6 MB vs ~50-100 MB for a set
+# Used by: Chrome Safe Browsing, Cassandra, Bitcoin SPV, RocksDB
+
+# TRIE: prefix tree for string keys
+class TrieNode:
+def __init__(self):
+\`\`\`
+
+self.children = {} # char -> TrieNode
+self.is_end = False
+
+
+\`\`\`python
+class Trie:
+def __init__(self): self.root = TrieNode()
+
+def insert(self, word): # O(L) where L = len(word)
+n = self.root
+for c in word:
+if c not in n.children: n.children[c] = TrieNode()
+n = n.children[c]
+\`\`\`
+
+n.is_end = True
+
+
+\`\`\`python
+def search(self, word) -> bool: # O(L)
+n = self.root
+for c in word:
+if c not in n.children: return False
+n = n.children[c]
+return n.is_end
+
+def autocomplete(self, prefix) -> list:
+n = self.root
+for c in prefix:
+if c not in n.children: return []
+n = n.children[c]
+results = []
+def dfs(node, path):
+if node.is_end: results.append(path)
+for c, child in sorted(node.children.items()):
+dfs(child, path + c)
+dfs(n, prefix)
+return results
+
+# WHEN TRIES BEAT HASH MAPS:
+# Prefix queries: 'all words starting with X' — O(|prefix|) to navigate
+# IP routing: longest-prefix matching (routers use Patricia/radix tries)
+# Spell checking: all words within edit distance K
+# Dictionary compression: shared prefixes save significant space
+\`\`\``
   },
   {
     id: "5-8",
     number: "5.8",
     title: "Hash Tables: The Most Important Data Structure",
-    content: `The **Hash Table** (or Hash Map) is arguably the most impactful data structure in computing. It provides (on average) **Constant Time $O(1)$** for insertion, deletion, and lookup. It is the magic behind Python's \`dict\`, JavaScript's \`Object\`, and Redis's core storage.
+    content: `Hash table with Robin Hood hashing: implement open addressing where on collision, if new element has longer probe sequence than incumbent, swap them. Benchmark against standard linear probing for 1M inserts and lookups.
+LRU Cache O(1): implement using doubly-linked list plus hash map. Support get(key) and put(key, value) with capacity limit. Test with 1M operations. Verify eviction order is correct.
+B-tree order 3: implement insert and search. Insert 50 random integers. Verify: all leaves at same depth, all non-root nodes have 2-5 keys. Count comparisons per search.
+Bloom filter analysis: test with 100K inserts then 100K non-inserted queries. Measure actual vs theoretical false positive rate for m/n ratios of 5, 8, 10, 15, 20. Plot the curve.
+External sort: sort a 500MB file of int64 using 64MB memory. Phase 1: read chunks, sort, write temp files. Phase 2: k-way merge using a min-heap. Measure I/O vs CPU time.
+Chapter 5 — Ten Data Structure Truths
+Data structure choice changes complexity class. O(n) vs O(1) is not a factor — it is a scalability cliff that no hardware overcomes.
+Arrays are cache-friendly, SIMD-vectorizable, and prefetcher-friendly. Use them unless a specific invariant requires a different structure.
+Struct of Arrays outperforms Array of Structs 2-4x for bulk column operations. Game engines and columnar databases exploit this pattern.
+Dynamic array append is O(1) amortized via doubling. Insertion at position i is O(n). Avoid inserting in the middle of large arrays.
+Linked lists beat arrays only when you have a direct node reference AND do not need random access. LRU cache is the canonical valid use.
+Hash tables: SipHash for DoS resistance (Python default). xxHash for non-security use. BLAKE3 or SHA-256 for cryptographic use.
+Load factor above 0.7 causes hash table probe chains to explode. Most implementations resize at 0.7-0.75 to maintain O(1) operations.
+B-trees minimize disk I/O by fitting many keys per page. For 1.6 billion rows, at most 4 page reads finds any row with a proper index.
 
-## The Concept: Key to Index
-The goal is to store key-value pairs. We use a **Hash Function** to transform a potentially infinite set of keys (like strings) into a finite range of array indices (the buckets).
-
-\`\`\`text
-Key: "user:123" -> HashFunction -> 452
-Buckets[452] = { name: "Alice", email: "alice@example.com" }
+\`\`\`python
+heapify() builds a heap in O(n) using Floyd's algorithm. Not O(n log n). Use it when converting a list to a priority queue.
 \`\`\`
 
-## The Three Components of a Great Hash Table
-1.  **A Large Enough Array**: The underlying storage for buckets.
-2.  **An Efficient Hash Function**: Must be fast and distribute keys uniformly.
-3.  **A Collision Resolution Strategy**: What happens when two different keys hash to the same index?
+Bloom filters use 10x less memory than hash sets at 1% false positive rate. Zero false negatives. Perfect for probably-yes definitely-no checks.
 
-## Why isn't it always $O(1)$?
-The $O(1)$ is an *average* case. If the hash function is poor and maps many keys to the same bucket, the performance degrades to $O(n)$ (a linked list of items in one bucket). This is known as a **Hash Collision Attack**, where an attacker sends specifically crafted keys to DOS a server by forcing it into $O(n^2)$ processing time.
 
-## Load Factor ($\lambda$)
-Defined as $\lambda = n/k$ (number of items / number of buckets). Most implementations resize the table when $\lambda$ hits 0.7 or 0.75. Resizing is an $O(n)$ operation as every single key must be re-hashed into the new, larger array.`
+---
+
+
+CHAPTER 6
+ALGORITHMS: FROM INTUITION TO PROOF
+Sorting, Graphs, Dynamic Programming, and Computational Complexity — Complete Mastery
+
+"An algorithm must be seen to be believed." — Donald Knuth`
   },
   {
     id: "5-9",
