@@ -5,353 +5,1008 @@ export const CH16_SECTIONS: Section[] = [
     id: "16-1",
     number: "16.1",
     title: "What Patterns Are and Are Not",
-    content: `A **Design Pattern** is a general, reusable solution to a commonly occurring problem within a given context in software design. It is not a finished design that can be transformed directly into code. Instead, it is a description or template for how to solve a problem that can be used in many different situations.
+    content: `Design patterns are reusable solutions to commonly occurring problems in software design. They are not code you copy — they are templates describing how to structure code to solve a specific class of problem. They give engineers a shared vocabulary: saying 'use the Observer pattern here' communicates an entire structural approach instantly.
+The 23 patterns from the Gang of Four book (Gamma, Helm, Johnson, Vlissides, 1994) remain the most important catalog. They are divided into three categories: Creational (how objects are created), Structural (how objects are composed), and Behavioral (how objects communicate and distribute responsibility).
 
-The concept was popularized by the "Gang of Four" (GoF) in their 1994 book, borrowing the idea from architect Christopher Alexander. Alexander observed that in architecture, certain problems (like "how to design a porch") were solved repeatedly with similar structural solutions.
 
-## What Patterns Are Not
-1. **Not a Framework:** A framework is code you use. A pattern is an idea you implement.
-2. **Not a Silver Bullet:** Using a pattern where it isn't needed (e.g., a Factory for a simple object) is "Over-engineering."
-3. **Not Language Specific:** While some patterns are easier in certain languages (like Strategy in JS), the underlying logic is universal.
-
-## The Three Categories
-The GoF categorized patterns into three main groups based on their purpose:
-- **Creational:** Concerned with the process of object creation.
-- **Structural:** Concerned with the composition of classes or objects.
-- **Behavioral:** Concerned with the interaction and responsibility of objects.
-
-## The Vocabulary of Design
-The greatest value of patterns is not the code—it is the **shared vocabulary**. When an architect says, "Let's use a Decorator here," everyone immediately understands that we are adding behavior dynamically without changing the original class. This level of abstraction allows for much faster and more precise communication.`
+---`
   },
   {
     id: "16-2",
     number: "16.2",
     title: "Creational Patterns: Factory Method",
-    content: `The **Factory Method** pattern defines an interface for creating an object, but lets subclasses decide which class to instantiate. It "defers" instantiation to subclasses.
+    content: `\`\`\`python
+# SINGLETON: ensure only one instance exists, provide global access point
+# Use for: database connection pools, configuration, logging, thread pools
+# Warning: overuse leads to hidden global state and tight coupling
 
-## The Problem
-Imagine a logistics application. Initially, it only handles trucks. When you want to add ships, you find that most of your code is coupled to the \`Truck\` class. Adding \`Ship\` requires changing the entire codebase.
+import threading
 
-## The Solution
-Instead of calling \`new Truck()\` directly, you call a \`createTransport()\` factory method.
-\`\`\`typescript
-abstract class Logistics {
-  abstract createTransport(): Transport;
+class DatabasePool:
+_instance = None
+_lock = threading.Lock()
 
-  planDelivery() {
-    const transport = this.createTransport();
-    transport.deliver();
-  }
-}
-
-class RoadLogistics extends Logistics {
-  createTransport() { return new Truck(); }
-}
-
-class SeaLogistics extends Logistics {
-  createTransport() { return new Ship(); }
-}
+def __new__(cls):
+if cls._instance is None:
+with cls._lock: # double-checked locking for thread safety
+if cls._instance is None:
 \`\`\`
 
-## When to Use It
-- When a class can't anticipate the class of objects it must create.
-- When a class wants its subclasses to specify the objects it creates.
-- When you want to localize the knowledge of which helper class is the best to create.`
+cls._instance = super().__new__(cls)
+cls._instance._initialized = False
+
+\`\`\`python
+return cls._instance
+
+def __init__(self):
+if self._initialized: return # prevent re-initialization
+\`\`\`
+
+self.connections = []
+self.max_connections = 10
+self._initialized = True
+
+
+\`\`\`python
+# Usage: DatabasePool() always returns same instance
+pool1 = DatabasePool()
+pool2 = DatabasePool()
+assert pool1 is pool2 # True: same object
+
+# MODERN PYTHON SINGLETON: use module-level instance
+# db_pool.py
+class _DatabasePool:
+def __init__(self): self.connections = []
+
+_pool = _DatabasePool() # module-level: created once, imported everywhere
+
+def get_pool(): return _pool
+# import get_pool and call it — always returns same instance
+\`\`\``
   },
   {
     id: "16-3",
     number: "16.3",
     title: "Creational Patterns: Abstract Factory",
-    content: `The **Abstract Factory** pattern provides an interface for creating families of related or dependent objects without specifying their concrete classes.
+    content: `\`\`\`python
+# FACTORY METHOD: define interface for creating object, let subclass decide type
+from abc import ABC, abstractmethod
 
-## Factory Method vs. Abstract Factory
-- **Factory Method** creates *one* product.
-- **Abstract Factory** creates a *family* of products.
+class Notification(ABC):
+@abstractmethod
+def send(self, message: str, recipient: str) -> bool: pass
 
-## The Scenario
-Suppose you are building a UI toolkit that needs to support Windows and Mac. You have buttons, checkboxes, and sliders. A Windows button should never be used with a Mac checkbox.
+class EmailNotification(Notification):
+def send(self, message, recipient) -> bool:
+print(f'Email to {recipient}: {message}')
+return True
 
-\`\`\`typescript
-interface GUIFactory {
-  createButton(): Button;
-  createCheckbox(): Checkbox;
-}
+class SMSNotification(Notification):
+def send(self, message, recipient) -> bool:
+print(f'SMS to {recipient}: {message}')
+return True
 
-class WinFactory implements GUIFactory {
-  createButton() { return new WinButton(); }
-  createCheckbox() { return new WinCheckbox(); }
-}
+class PushNotification(Notification):
+def send(self, message, recipient) -> bool:
+print(f'Push to {recipient}: {message}')
+return True
 
-class MacFactory implements GUIFactory {
-  createButton() { return new MacButton(); }
-  createCheckbox() { return new MacCheckbox(); }
-}
+class NotificationFactory:
+_registry = {
 \`\`\`
 
-## Benefits
-- **Consistency:** Ensures that products from the same factory are used together.
-- **Decoupling:** The client code only knows about the interfaces (\`GUIFactory\`, \`Button\`), not the concrete implementations (\`WinButton\`).`
+'email': EmailNotification,
+'sms': SMSNotification,
+'push': PushNotification,
+}
+
+
+\`\`\`python
+@classmethod
+def create(cls, notification_type: str) -> Notification:
+klass = cls._registry.get(notification_type)
+if not klass:
+raise ValueError(f'Unknown notification type: {notification_type}')
+return klass()
+
+@classmethod
+def register(cls, name: str, klass: type) -> None:
+\`\`\`
+
+cls._registry[name] = klass
+
+
+\`\`\`python
+# Usage:
+notifier = NotificationFactory.create('email')
+\`\`\`
+
+notifier.send('Your order shipped!', 'user@example.com')
+
+
+\`\`\`python
+# Adding WhatsApp: register new class, zero changes to factory or callers
+class WhatsAppNotification(Notification):
+def send(self, message, recipient) -> bool:
+print(f'WhatsApp to {recipient}: {message}')
+return True
+\`\`\`
+
+
+NotificationFactory.register('whatsapp', WhatsAppNotification)
+
+
+\`\`\`python
+# ABSTRACT FACTORY: create families of related objects
+class UIFactory(ABC):
+@abstractmethod
+def create_button(self): pass
+@abstractmethod
+def create_dialog(self): pass
+
+class WindowsUIFactory(UIFactory):
+def create_button(self): return WindowsButton()
+def create_dialog(self): return WindowsDialog()
+
+class MacOSUIFactory(UIFactory):
+def create_button(self): return MacButton()
+def create_dialog(self): return MacDialog()
+
+# Application only knows UIFactory — works on both platforms
+def build_ui(factory: UIFactory):
+button = factory.create_button()
+dialog = factory.create_dialog()
+return button, dialog
+\`\`\``
   },
   {
     id: "16-4",
     number: "16.4",
     title: "Creational Patterns: Builder",
-    content: `The **Builder** pattern is used to construct complex objects step by step. It is particularly useful when an object has many configuration options or optional parameters.
+    content: `\`\`\`python
+# BUILDER: separate construction of complex object from its representation
+# Use when: object has many optional parameters, construction is multi-step
 
-## The "Telescoping Constructor" Problem
-When a class has 10 optional parameters, the constructor becomes a nightmare:
-\`\`\`typescript
-// Bad
-new User("John", "Doe", null, null, "Street 1", true, false, 42);
+from dataclasses import dataclass, field
+from typing import List, Optional
+
+@dataclass
+class QueryConfig:
 \`\`\`
 
-## The Builder Solution
-The Builder allows you to produce different types and representations of an object using the same construction code.
-\`\`\`typescript
-const user = new UserBuilder("John", "Doe")
-  .setAge(42)
-  .setAddress("Street 1")
-  .setIsActive(true)
-  .build();
+table: str
+columns: List[str] = field(default_factory=list)
+conditions: List[str] = field(default_factory=list)
+order_by: Optional[str] = None
+limit: Optional[int] = None
+offset: int = 0
+joins: List[str] = field(default_factory=list)
+
+
+\`\`\`python
+class QueryBuilder:
+def __init__(self, table: str):
 \`\`\`
 
-## Key Components
-- **Builder Interface:** Defines the steps.
-- **Concrete Builder:** Implements the steps and tracks the product.
-- **Director (Optional):** Defines the order in which to call construction steps for common configurations (e.g., \`buildAdminUser\`).
+self._config = QueryConfig(table=table)
 
-## Real-world Example
-The SQL query builders found in many ORMs (like Knex.js or SQLAlchemy) are classic implementations of this pattern. They allow you to chain methods like \`.select()\`, \`.where()\`, and \`.limit()\` before finally calling \`.execute()\`.`
+
+\`\`\`python
+def select(self, *columns: str) -> 'QueryBuilder':
+\`\`\`
+
+self._config.columns.extend(columns)
+
+\`\`\`python
+return self # return self enables method chaining
+
+def where(self, condition: str) -> 'QueryBuilder':
+\`\`\`
+
+self._config.conditions.append(condition)
+
+\`\`\`python
+return self
+
+def order_by(self, column: str) -> 'QueryBuilder':
+\`\`\`
+
+self._config.order_by = column
+
+\`\`\`python
+return self
+
+def limit(self, n: int) -> 'QueryBuilder':
+\`\`\`
+
+self._config.limit = n
+
+\`\`\`python
+return self
+
+def offset(self, n: int) -> 'QueryBuilder':
+\`\`\`
+
+self._config.offset = n
+
+\`\`\`python
+return self
+
+def join(self, join_clause: str) -> 'QueryBuilder':
+\`\`\`
+
+self._config.joins.append(join_clause)
+
+\`\`\`python
+return self
+
+def build(self) -> str:
+cols = ', '.join(self._config.columns) if self._config.columns else '*'
+sql = f'SELECT {cols} FROM {self._config.table}'
+for j in self._config.joins:
+\`\`\`
+
+sql += f' {j}'
+
+\`\`\`python
+if self._config.conditions:
+\`\`\`
+
+sql += ' WHERE ' + ' AND '.join(self._config.conditions)
+
+\`\`\`python
+if self._config.order_by:
+\`\`\`
+
+sql += f' ORDER BY {self._config.order_by}'
+
+\`\`\`python
+if self._config.limit:
+\`\`\`
+
+sql += f' LIMIT {self._config.limit}'
+
+\`\`\`python
+if self._config.offset:
+\`\`\`
+
+sql += f' OFFSET {self._config.offset}'
+
+\`\`\`python
+return sql
+
+# Usage: fluent, readable, hard to get wrong
+query = (
+QueryBuilder('orders')
+\`\`\`
+
+.select('id', 'customer_id', 'total_cents', 'status')
+.join('JOIN customers ON orders.customer_id = customers.id')
+.where('status = "pending"')
+.where('total_cents > 1000')
+.order_by('created_at DESC')
+.limit(50)
+.build()
+)
+
+\`\`\`python
+print(query)
+# SELECT id, customer_id, total_cents, status FROM orders
+# JOIN customers ON orders.customer_id = customers.id
+# WHERE status = 'pending' AND total_cents > 1000
+# ORDER BY created_at DESC LIMIT 50
+\`\`\`
+
+---`
   },
   {
     id: "16-5",
     number: "16.5",
     title: "Creational Patterns: Prototype",
-    content: `The **Prototype** pattern allows you to create new objects by copying an existing object (the "prototype") rather than creating them from scratch.
+    content: `\`\`\`python
+# ADAPTER: convert interface of a class into another interface clients expect
+# Use when: integrating third-party code with incompatible interface
+# Real world: every payment gateway adapter, every cloud storage adapter
 
-## Why use it?
-1. **Creation Cost:** Creating a new object from a database query or complex calculation might be expensive. Copying an existing one is fast.
-2. **Hidden Classes:** When you have a reference to an object but don't know its concrete class, you can still clone it if it implements a \`clone()\` method.
+# Your application expects this interface:
+from abc import ABC, abstractmethod
 
-## Implementation (Python Example)
-\`\`\`python
-import copy
+class PaymentGateway(ABC):
+@abstractmethod
+def charge(self, amount_cents: int, card_token: str) -> dict: pass
+@abstractmethod
+def refund(self, charge_id: str, amount_cents: int) -> dict: pass
 
-class Shape:
-    def __init__(self):
-        self.id = None
-        self.type = None
+# Stripe has a completely different interface:
+class StripeClient:
+def create_charge(self, source, amount, currency='usd'): ...
+def create_refund(self, charge, amount=None): ...
 
-    def clone(self):
-        return copy.deepcopy(self)
+# PayPal has yet another interface:
+class PayPalClient:
+def execute_payment(self, token, amount, currency='USD'): ...
+def issue_refund(self, transaction_id, amount): ...
 
-circle = Circle() # Assume Circle inherits Shape
-circle.id = "1"
-new_circle = circle.clone()
+# ADAPTERS: wrap third-party clients to match your interface
+class StripeAdapter(PaymentGateway):
+def __init__(self, stripe_client: StripeClient):
 \`\`\`
 
-## The "Deep vs. Shallow" Caveat
-When cloning, you must decide whether to do a **Shallow Copy** (copy references only) or a **Deep Copy** (recursively copy all child objects). In Prototype, you almost always want a Deep Copy to ensure the clone is truly independent.`
+self._stripe = stripe_client
+
+
+\`\`\`python
+def charge(self, amount_cents: int, card_token: str) -> dict:
+result = self._stripe.create_charge(
+source=card_token,
+amount=amount_cents,
+currency='usd'
+\`\`\`
+
+)
+
+\`\`\`python
+return {'charge_id': result.id, 'status': result.status}
+
+def refund(self, charge_id: str, amount_cents: int) -> dict:
+result = self._stripe.create_refund(
+charge=charge_id, amount=amount_cents
+\`\`\`
+
+)
+
+\`\`\`python
+return {'refund_id': result.id, 'status': result.status}
+
+class PayPalAdapter(PaymentGateway):
+def __init__(self, paypal_client: PayPalClient):
+\`\`\`
+
+self._paypal = paypal_client
+
+
+\`\`\`python
+def charge(self, amount_cents: int, card_token: str) -> dict:
+amount_dollars = amount_cents / 100
+result = self._paypal.execute_payment(card_token, amount_dollars)
+return {'charge_id': result.transaction_id, 'status': 'success'}
+
+def refund(self, charge_id: str, amount_cents: int) -> dict:
+result = self._paypal.issue_refund(charge_id, amount_cents / 100)
+return {'refund_id': result.refund_id, 'status': 'success'}
+
+# Application code uses PaymentGateway — works with Stripe or PayPal
+def process_payment(gateway: PaymentGateway, amount: int, token: str) -> dict:
+return gateway.charge(amount, token)
+
+# Switching providers: change which adapter is injected, zero code changes
+\`\`\``
   },
   {
     id: "16-6",
     number: "16.6",
     title: "Creational Patterns: Singleton — and Why to Avoid It",
-    content: `The **Singleton** pattern ensures that a class has only one instance and provides a global point of access to it.
+    content: `\`\`\`python
+# DECORATOR PATTERN: attach additional responsibilities to objects dynamically
+# Use when: want to add behavior to individual objects, not the whole class
+# Note: different from Python's @decorator syntax (though related concept)
 
-## The Implementation
-\`\`\`typescript
-class Database {
-  private static instance: Database;
-  private constructor() {} // Private prevents 'new'
+from abc import ABC, abstractmethod
 
-  public static getInstance(): Database {
-    if (!Database.instance) {
-      Database.instance = new Database();
-    }
-    return Database.instance;
-  }
-}
+class DataSource(ABC):
+@abstractmethod
+def write(self, data: bytes) -> None: pass
+@abstractmethod
+def read(self) -> bytes: pass
+
+class FileDataSource(DataSource):
+def __init__(self, filename: str):
 \`\`\`
 
-## Why it is often an Anti-Pattern
-While it seems useful for things like loggers or database connections, the Singleton is often "Global State" in disguise.
-1. **Hidden Dependencies:** When a class uses a Singleton, you can't tell by looking at its constructor. It "reaches out" and grabs the instance.
-2. **Testing Nightmare:** Since the state persists across tests, one test can "pollute" the next one, leading to flaky suites.
-3. **Violates SRP:** The class is responsible for its business logic *and* for managing its own lifecycle.
-4. **Concurrency Issues:** In multi-threaded environments, creating the singleton safely (using double-checked locking) is surprisingly difficult.
+self.filename = filename
 
-**Professor's Recommendation:** Use **Dependency Injection** instead. Create one instance of the database at the start of your application and pass it into the classes that need it. This gives you all the benefits of a single instance without the architectural debt.`
+
+\`\`\`python
+def write(self, data: bytes) -> None:
+with open(self.filename, 'wb') as f:
+\`\`\`
+
+f.write(data)
+
+
+\`\`\`python
+def read(self) -> bytes:
+with open(self.filename, 'rb') as f:
+return f.read()
+
+class DataSourceDecorator(DataSource): # Base decorator
+def __init__(self, wrapped: DataSource):
+\`\`\`
+
+self._wrapped = wrapped
+
+
+\`\`\`python
+def write(self, data: bytes) -> None:
+\`\`\`
+
+self._wrapped.write(data)
+
+
+\`\`\`python
+def read(self) -> bytes:
+return self._wrapped.read()
+
+class EncryptionDecorator(DataSourceDecorator):
+def write(self, data: bytes) -> None:
+encrypted = self._encrypt(data)
+\`\`\`
+
+self._wrapped.write(encrypted)
+
+
+\`\`\`python
+def read(self) -> bytes:
+return self._decrypt(self._wrapped.read())
+
+def _encrypt(self, data: bytes) -> bytes:
+return bytes(b ^ 0xFF for b in data) # simple XOR for illustration
+
+def _decrypt(self, data: bytes) -> bytes:
+return bytes(b ^ 0xFF for b in data) # XOR is its own inverse
+
+class CompressionDecorator(DataSourceDecorator):
+def write(self, data: bytes) -> None:
+import zlib
+\`\`\`
+
+self._wrapped.write(zlib.compress(data))
+
+
+\`\`\`python
+def read(self) -> bytes:
+import zlib
+return zlib.decompress(self._wrapped.read())
+
+# COMPOSING DECORATORS: stack them in any order
+source = FileDataSource('data.bin')
+encrypted = EncryptionDecorator(source)
+compressed_and_encrypted = CompressionDecorator(encrypted)
+
+# Write: compress -> encrypt -> write to file
+\`\`\`
+
+compressed_and_encrypted.write(b'sensitive data here')
+
+\`\`\`python
+# Read: read from file -> decrypt -> decompress
+data = compressed_and_encrypted.read()
+
+# Adding logging: wrap with LoggingDecorator(compressed_and_encrypted)
+# No changes to existing decorators or FileDataSource
+\`\`\``
   },
   {
     id: "16-7",
     number: "16.7",
     title: "Structural Patterns: Adapter",
-    content: `The **Adapter** pattern (also known as a Wrapper) allows objects with incompatible interfaces to work together. It acts as a bridge between two systems.
+    content: `\`\`\`python
+# FACADE: provide simplified interface to complex subsystem
+# Use when: subsystem has many classes with complex interactions
+# Real world: boto3 is a facade over AWS APIs, Django ORM is a facade over SQL
 
-## The Scenario
-Your app expects data in JSON from a \`StockProvider\`, but you need to use a legacy 3rd-party library that only provides XML.
+# COMPLEX SUBSYSTEM: video conversion
+class VideoFile:
+def __init__(self, filename: str): self.filename = filename
 
-## The Solution
-You create an Adapter that wraps the legacy service. The Adapter implements the interface your app expects and translates the calls to the legacy service.
+class CodecFactory:
+def extract(self, file: VideoFile): ...
 
-\`\`\`typescript
-// The expected interface
-interface StockService {
-  getQuote(symbol: string): JSON;
-}
+class BitrateReader:
+def read(self, filename: str, codec): ...
+def convert(self, buffer, codec): ...
 
-class XMLToJSONAdapter implements StockService {
-  private legacyService: LegacyXMLService;
+class AudioMixer:
+def fix(self, result): ...
 
-  getQuote(symbol: string) {
-    const xml = this.legacyService.fetchXML(symbol);
-    return this.convertToJSON(xml);
-  }
-}
+class MPEG4CompressionCodec:
+name = 'mp4'
+
+class OggCompressionCodec:
+name = 'ogg'
+
+# FACADE: hides all this complexity behind one simple method
+class VideoConverter:
+def convert(self, filename: str, output_format: str) -> VideoFile:
+file = VideoFile(filename)
+source_codec = CodecFactory().extract(file)
+
+if output_format == 'mp4':
+dest_codec = MPEG4CompressionCodec()
+elif output_format == 'ogg':
+dest_codec = OggCompressionCodec()
+else:
+raise ValueError(f'Unsupported format: {output_format}')
+
+buffer = BitrateReader().read(filename, source_codec)
+result = BitrateReader().convert(buffer, dest_codec)
+result = AudioMixer().fix(result)
+return VideoFile(filename.replace('.', f'_{output_format}.'))
+
+# Client code: completely hidden from subsystem complexity
+converter = VideoConverter()
+mp4 = converter.convert('movie.avi', 'mp4')
+ogg = converter.convert('movie.avi', 'ogg')
+
+# REAL-WORLD FACADE EXAMPLES:
+# Django's render(): wraps template loading, context processing, HTTP response
+# requests.get(): wraps urllib3 connection pool, SSL, redirects, retries
+# boto3.client('s3').upload_file(): wraps multipart upload, retry, checksums
 \`\`\`
 
-## Real-world usage
-- Adapting old API responses to new UI models.
-- "Shims" in JavaScript that allow modern code to run in older browsers by adapting the browser's APIs.`
+---`
   },
   {
     id: "16-8",
     number: "16.8",
     title: "Structural Patterns: Bridge",
-    content: `The **Bridge** pattern decouples an abstraction from its implementation so that the two can vary independently. It is the "compositional" alternative to inheritance.
+    content: `\`\`\`python
+# OBSERVER: define one-to-many dependency so when one object changes state,
+# all dependents notified automatically
+# Use when: event-driven systems, UI updates, real-time notifications
 
-## The Problem
-You have a \`RemoteControl\` class and subclasses like \`AdvancedRemoteControl\`. You also have \`TV\` and \`Radio\`. If you use inheritance, you end up with a "Cartesian product" of classes: \`TVRemote\`, \`RadioRemote\`, \`AdvancedTVRemote\`, \`AdvancedRadioRemote\`. This is a "Class Explosion."
+from abc import ABC, abstractmethod
+from typing import List
 
-## The Bridge Solution
-Instead of inheriting, the \`RemoteControl\` **has a** reference to a \`Device\`.
-\`\`\`typescript
-class RemoteControl {
-  protected device: Device;
-  constructor(device: Device) { this.device = device; }
-  togglePower() { this.device.on(); }
-}
+class EventListener(ABC):
+@abstractmethod
+def on_event(self, event_type: str, data: dict) -> None: pass
 
-class AdvancedRemote extends RemoteControl {
-  mute() { this.device.setVolume(0); }
-}
+class EventManager:
+def __init__(self):
 \`\`\`
 
-## Why it matters
-The Bridge pattern allows you to add new types of remotes without touching the device code, and new types of devices without touching the remote code. It turns an $N \times M$ problem into an $N + M$ problem.`
+self._listeners: dict[str, List[EventListener]] = {}
+
+
+\`\`\`python
+def subscribe(self, event_type: str, listener: EventListener) -> None:
+if event_type not in self._listeners:
+\`\`\`
+
+self._listeners[event_type] = []
+self._listeners[event_type].append(listener)
+
+
+\`\`\`python
+def unsubscribe(self, event_type: str, listener: EventListener) -> None:
+if event_type in self._listeners:
+\`\`\`
+
+self._listeners[event_type].remove(listener)
+
+
+\`\`\`python
+def notify(self, event_type: str, data: dict) -> None:
+for listener in self._listeners.get(event_type, []):
+\`\`\`
+
+listener.on_event(event_type, data)
+
+
+\`\`\`python
+# CONCRETE OBSERVERS: each handles one concern
+class EmailNotificationListener(EventListener):
+def on_event(self, event_type: str, data: dict) -> None:
+if event_type == 'order.placed':
+send_order_confirmation_email(data['customer_email'], data['order_id'])
+
+class InventoryListener(EventListener):
+def on_event(self, event_type: str, data: dict) -> None:
+if event_type == 'order.placed':
+for item in data['items']:
+decrement_inventory(item['sku'], item['quantity'])
+
+class AnalyticsListener(EventListener):
+def on_event(self, event_type: str, data: dict) -> None:
+track_event(event_type, data)
+
+# SUBJECT: the object being observed
+class OrderService:
+def __init__(self, events: EventManager):
+\`\`\`
+
+self.events = events
+
+
+\`\`\`python
+def place_order(self, order_data: dict) -> dict:
+order = create_order(order_data)
+# Notify all interested listeners — no direct coupling
+\`\`\`
+
+self.events.notify('order.placed', {
+'order_id': order.id,
+'customer_email': order.customer.email,
+'items': order.items
+})
+
+\`\`\`python
+return order
+
+# WIRING IT TOGETHER:
+events = EventManager()
+\`\`\`
+
+events.subscribe('order.placed', EmailNotificationListener())
+events.subscribe('order.placed', InventoryListener())
+events.subscribe('order.placed', AnalyticsListener())
+
+
+\`\`\`python
+service = OrderService(events)
+
+# Adding a new reaction to order.placed: add new listener, zero code changes
+# Removing email notifications: unsubscribe, zero code changes to OrderService
+\`\`\``
   },
   {
     id: "16-9",
     number: "16.9",
     title: "Structural Patterns: Composite",
-    content: `The **Composite** pattern allows you to treat individual objects and compositions of objects uniformly. It is used to represent part-whole hierarchies.
+    content: `\`\`\`python
+# STRATEGY: define family of algorithms, encapsulate each, make interchangeable
+# Use when: need to switch algorithms at runtime, or have many related variants
 
-## The Classic Example: File Systems
-A file system consists of **Files** and **Directories**. A Directory can contain both Files and other Directories.
-- **Leaf:** File
-- **Composite:** Directory
+from abc import ABC, abstractmethod
+from typing import List
 
-## Implementation
-Both File and Directory implement the same interface (e.g., \`FileSystemItem\`).
-\`\`\`typescript
-interface FileSystemItem {
-  getSize(): number;
-}
+class SortStrategy(ABC):
+@abstractmethod
+def sort(self, data: List) -> List: pass
 
-class File implements FileSystemItem {
-  constructor(private size: number) {}
-  getSize() { return this.size; }
-}
+class QuickSortStrategy(SortStrategy):
+def sort(self, data: List) -> List:
+if len(data) <= 1: return data
+pivot = data[len(data)//2]
+left = [x for x in data if x < pivot]
+mid = [x for x in data if x == pivot]
+right = [x for x in data if x > pivot]
+return self.sort(left) + mid + self.sort(right)
 
-class Directory implements FileSystemItem {
-  private items: FileSystemItem[] = [];
-  getSize() {
-    return this.items.reduce((sum, item) => sum + item.getSize(), 0);
-  }
-}
+class MergeSortStrategy(SortStrategy):
+def sort(self, data: List) -> List:
+if len(data) <= 1: return data
+mid = len(data)//2
+left = self.sort(data[:mid])
+right = self.sort(data[mid:])
+return self._merge(left, right)
+
+def _merge(self, left, right):
+result = []; i = j = 0
+while i < len(left) and j < len(right):
+if left[i] <= right[j]: result.append(left[i]); i+=1
+else: result.append(right[j]); j+=1
+return result + left[i:] + right[j:]
+
+class TimSortStrategy(SortStrategy):
+def sort(self, data: List) -> List:
+return sorted(data) # Python's built-in Timsort
+
+class DataProcessor:
+def __init__(self, sort_strategy: SortStrategy):
 \`\`\`
 
-## Why it's powerful
-The client doesn't need to know if it's dealing with a single file or a massive directory tree. It just calls \`.getSize()\`. This recursion is the essence of the pattern.`
+self._sorter = sort_strategy
+
+
+\`\`\`python
+def set_strategy(self, strategy: SortStrategy) -> None:
+\`\`\`
+
+self._sorter = strategy # swap strategy at runtime
+
+
+\`\`\`python
+def process(self, data: List) -> List:
+return self._sorter.sort(data)
+
+# Runtime strategy switching based on data characteristics:
+processor = DataProcessor(TimSortStrategy())
+
+def process_dataset(data: List) -> List:
+if len(data) < 100: # small: quicksort
+\`\`\`
+
+processor.set_strategy(QuickSortStrategy())
+
+\`\`\`python
+elif data == sorted(data): # already sorted: timsort optimal
+\`\`\`
+
+processor.set_strategy(TimSortStrategy())
+
+\`\`\`python
+else: # general case
+\`\`\`
+
+processor.set_strategy(MergeSortStrategy())
+
+\`\`\`python
+return processor.process(data)
+\`\`\``
   },
   {
     id: "16-10",
     number: "16.10",
     title: "Structural Patterns: Decorator",
-    content: `The **Decorator** pattern allows behavior to be added to an individual object, dynamically, without affecting the behavior of other objects from the same class.
+    content: `\`\`\`python
+# COMMAND: encapsulate a request as an object
+# Use when: need undo/redo, request queuing, logging of operations, transactions
 
-## Decorator vs. Inheritance
-Inheritance is static (at compile time). Decorator is dynamic (at runtime).
+from abc import ABC, abstractmethod
+from typing import List
 
-## The Coffee Example
-You have a \`SimpleCoffee\`. You want to add \`Milk\` and \`Sugar\`.
-\`\`\`typescript
-interface Coffee { getCost(): number; }
+class Command(ABC):
+@abstractmethod
+def execute(self) -> None: pass
 
-class SimpleCoffee implements Coffee { getCost() { return 10; } }
+@abstractmethod
+def undo(self) -> None: pass
 
-class MilkDecorator implements Coffee {
-  constructor(private coffee: Coffee) {}
-  getCost() { return this.coffee.getCost() + 2; }
-}
-
-// Usage
-let myCoffee = new SimpleCoffee();
-myCoffee = new MilkDecorator(myCoffee);
-myCoffee = new SugarDecorator(myCoffee);
-console.log(myCoffee.getCost()); // 13ish
+class TextEditor:
+def __init__(self):
 \`\`\`
 
-## Java I/O: The Famous Implementation
-Java's I/O library is a giant set of decorators:
-\`\`\`java
-InputStream is = new BufferedInputStream(new FileInputStream("file.txt"));
+self.text = ''
+self._history: List[Command] = []
+self._redo_stack: List[Command] = []
+
+
+\`\`\`python
+def execute(self, command: Command) -> None:
 \`\`\`
-The \`BufferedInputStream\` "decorates" the \`FileInputStream\` with buffering capabilities.`
+
+command.execute()
+self._history.append(command)
+self._redo_stack.clear() # new action clears redo history
+
+
+\`\`\`python
+def undo(self) -> None:
+if not self._history: return
+command = self._history.pop()
+\`\`\`
+
+command.undo()
+self._redo_stack.append(command)
+
+
+\`\`\`python
+def redo(self) -> None:
+if not self._redo_stack: return
+command = self._redo_stack.pop()
+\`\`\`
+
+command.execute()
+self._history.append(command)
+
+
+\`\`\`python
+class InsertTextCommand(Command):
+def __init__(self, editor: TextEditor, position: int, text: str):
+\`\`\`
+
+self.editor = editor
+self.position = position
+self.text = text
+
+
+\`\`\`python
+def execute(self) -> None:
+\`\`\`
+
+self.editor.text = (
+self.editor.text[:self.position] +
+self.text +
+self.editor.text[self.position:]
+)
+
+
+\`\`\`python
+def undo(self) -> None:
+\`\`\`
+
+self.editor.text = (
+self.editor.text[:self.position] +
+self.editor.text[self.position + len(self.text):]
+)
+
+
+\`\`\`python
+class DeleteTextCommand(Command):
+def __init__(self, editor: TextEditor, position: int, length: int):
+\`\`\`
+
+self.editor = editor
+self.position = position
+self.length = length
+self._deleted = '' # saved for undo
+
+
+\`\`\`python
+def execute(self) -> None:
+\`\`\`
+
+self._deleted = self.editor.text[self.position:self.position + self.length]
+self.editor.text = (
+self.editor.text[:self.position] +
+self.editor.text[self.position + self.length:]
+)
+
+
+\`\`\`python
+def undo(self) -> None:
+\`\`\`
+
+self.editor.text = (
+self.editor.text[:self.position] +
+self._deleted +
+self.editor.text[self.position:]
+)
+
+
+\`\`\`python
+# Usage:
+editor = TextEditor()
+\`\`\`
+
+editor.execute(InsertTextCommand(editor, 0, 'Hello World'))
+editor.execute(InsertTextCommand(editor, 5, ', Beautiful'))
+
+\`\`\`python
+print(editor.text) # 'Hello, Beautiful World'
+\`\`\`
+
+editor.undo()
+
+\`\`\`python
+print(editor.text) # 'Hello World'
+\`\`\`
+
+editor.redo()
+
+\`\`\`python
+print(editor.text) # 'Hello, Beautiful World'
+\`\`\``
   },
   {
     id: "16-11",
     number: "16.11",
     title: "Structural Patterns: Facade",
-    content: `The **Facade** pattern provides a simplified interface to a library, a framework, or any other complex set of classes.
-
-## The Problem
-A complex subsystem might have 50 classes and hundreds of methods. A client who only wants to do one simple thing (e.g., "Place Order") shouldn't have to understand the inventory system, the payment gateway, the shipping logic, and the notification service.
-
-## The Facade Solution
-Create a \`StoreFacade\` that exposes a single \`placeOrder()\` method. Internally, it orchestrates all the complex subsystems.
-
-\`\`\`typescript
-class StoreFacade {
-  placeOrder(itemId: string) {
-    inventory.check(itemId);
-    payment.charge();
-    shipping.book();
-    notifier.send();
-  }
-}
-\`\`\`
-
-## Benefits
-- **Reduces Coupling:** Clients depend on one facade rather than ten subsystems.
-- **Information Hiding:** The facade hides the "messy" parts of the system.`
+    content: `Pattern
+Category
+Problem It Solves
+When to Use
+Singleton
+Creational
+Ensure single instance with global access
+Config, connection pools, logging (use sparingly)
+Factory Method
+Creational
+Create objects without specifying exact class
+When subclass should decide which object to create
+Abstract Factory
+Creational
+Create families of related objects
+Cross-platform UI, database drivers, cloud providers
+Builder
+Creational
+Construct complex objects step by step
+Objects with many optional params, SQL builders, HTTP requests
+Prototype
+Creational
+Copy existing objects without depending on their classes
+Expensive object creation, configuration templates
+Adapter
+Structural
+Make incompatible interfaces work together
+Integrating third-party libraries, legacy code integration
+Bridge
+Structural
+Decouple abstraction from implementation
+Multiple dimensions of variation (shape + color)
+Composite
+Structural
+Treat individual objects and groups uniformly
+File systems, UI component trees, org charts
+Decorator
+Structural
+Add behavior without modifying original object
+I/O streams, middleware, caching, logging, auth
+Facade
+Structural
+Simplified interface to complex subsystem
+API clients, ORM wrappers, service layers
+Flyweight
+Structural
+Share common state among many fine-grained objects
+Game entities, text rendering, cache objects
+Proxy
+Structural
+Placeholder controlling access to another object
+Lazy loading, access control, caching, logging
+Chain of Responsibility
+Behavioral
+Pass request along handler chain
+Middleware, event handling, validation pipelines
+Command
+Behavioral
+Encapsulate request as object
+Undo/redo, task queues, transactional operations
+Iterator
+Behavioral
+Access elements without exposing internal structure
+Collections, generators, lazy sequences
+Mediator
+Behavioral
+Reduce direct dependencies between components
+Chat rooms, air traffic control, UI event buses
+Memento
+Behavioral
+Capture and restore object state
+Undo history, state snapshots, checkpoints
+Observer
+Behavioral
+Notify multiple objects about state changes
+Event systems, UI bindings, message queues
+State
+Behavioral
+Alter behavior when internal state changes
+Order status, connection states, game states
+Strategy
+Behavioral
+Family of interchangeable algorithms
+Sorting, payment processing, compression, routing
+Template Method
+Behavioral
+Define skeleton of algorithm, subclass fills in steps
+Report generation, data processing pipelines
+Visitor
+Behavioral
+Add operations to objects without modifying them
+Compilers, document export, type checking
+Interpreter
+Behavioral
+Grammar and interpreter for a language
+SQL parsers, regex engines, expression evaluators`
   },
   {
     id: "16-12",
     number: "16.12",
     title: "Structural Patterns: Flyweight",
-    content: `The **Flyweight** pattern is used to reduce memory usage by sharing as much data as possible with other similar objects. It is a "Space Optimization" pattern.
+    content: `IMPLEMENT 5 PATTERNS: Choose 5 patterns from the catalog you have not used before. For each: implement a working example in a domain you understand (not the textbook examples), write tests verifying the pattern behaves correctly, and explain in one paragraph what problem it solves.
+PATTERN IDENTIFICATION: Read the source code of a popular open-source Python project (Django, Flask, SQLAlchemy, Celery). Identify 5 design patterns in actual use. For each: name the pattern, show the relevant code, explain why that pattern was the right choice there.
+OBSERVER SYSTEM: Build a complete event-driven order management system. Events: order.placed, order.paid, order.shipped, order.delivered, order.cancelled. Listeners: email notifications, inventory management, analytics, fraud detection. Show that adding a new listener requires zero changes to the order management code.
+STRATEGY + FACTORY: Build a file compression system using Strategy (different compression algorithms) and Factory (create the right strategy based on file type and size). Support: gzip, zlib, no compression. Factory chooses: no compression for < 1KB, gzip for text, zlib for binary.
+COMMAND WITH UNDO: Extend the TextEditor example to support: bulk operations (execute multiple commands as one undoable unit), command history persistence (save history to file, reload on startup), and macro recording (record a sequence of commands, replay on demand).
+Chapter 16 — Ten Pattern Truths
+Patterns are vocabulary, not recipes. Saying Observer or Strategy communicates an entire structural approach. Learn the vocabulary.
+Never force a pattern. Apply patterns only when the problem they solve is actually present. Premature pattern application creates unnecessary complexity.
+Creational patterns manage object creation. Factory Method and Abstract Factory decouple clients from concrete classes.
+Builder is the right choice when a constructor would need 4+ parameters, especially optional ones. Method chaining makes construction readable.
+Adapter is essential for third-party integration. Wrap external APIs with adapters so your code never depends directly on vendor interfaces.
+Decorator adds behavior without inheritance. It is more flexible — you can stack decorators in any combination at runtime.
+Observer decouples event producers from consumers. Adding a new reaction requires zero changes to the code that produces the event.
+Strategy makes algorithms interchangeable. Switch algorithms at runtime based on context without changing the code that uses them.
+Command enables undo/redo by encapsulating operations as objects with execute() and undo(). Every action becomes reversible.
+Facade reduces cognitive load for complex subsystems. Design facades that expose 20% of the functionality that covers 80% of use cases.
 
-## Intrinsic vs. Extrinsic State
-- **Intrinsic State:** Data that is constant across many objects (e.g., the image of a "Tree" in a forest simulation).
-- **Extrinsic State:** Data that is unique to each instance (e.g., the X, Y coordinates of that specific tree).
+CHAPTER 17
+SOFTWARE ARCHITECTURE
+Layered, Hexagonal, Event-Driven, Microservices — The Complete Architectural Toolkit
 
-## Implementation
-Instead of storing the tree image 1,000,000 times, you store it once in a \`TreeType\` object. Each \`Tree\` instance merely holds a reference to the \`TreeType\` and its own coordinates.
-
-## Real-world Example
-In a text editor, storing the font, size, and color for every single character would be wasteful. Instead, characters share a flyweight object representing their formatting.`
+"Architecture is the decisions that are hard to change." — Martin Fowler`
   },
   {
     id: "16-13",
