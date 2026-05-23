@@ -5,208 +5,472 @@ export const CH11_SECTIONS: Section[] = [
     id: "11-1",
     number: "11.1",
     title: "The Testing Manifesto: Why Tests Are Not Optional",
-    content: `In the early days of software, testing was often seen as a separate "phase" that happened after the real engineering was done. Today, we understand that **testing is the engineering**. Without tests, you aren't building a system; you're building a collection of hopeful guesses.
+    content: `Testing is not about finding bugs. Testing is about enabling change. The purpose of a comprehensive test suite is not to prove your code currently works — it is to give you the confidence to change your code without fear. Without tests, every change is a potential regression. With tests, every change is a guided transformation with immediate feedback.
+The engineers who write tests are not being slow or cautious. They are being fast. They are investing time now to avoid the compounding cost of manual verification, production bugs, customer escalations, and emergency rollbacks later. The test suite is what separates a codebase that can evolve quickly from one that calcifies under the weight of its own fragility.
 
-## Testing as Documentation
-A well-written test suite is the most honest documentation in a codebase. Unlike a README file, which can drift out of date, a test must be accurate, or the build fails. A test tells you:
-- What the input should be.
-- What the output must be.
-- How the system should handle failure.
 
-## Testing as Design Tool
-When you find a piece of code is "hard to test," it is almost always because the code is **poorly designed**. Testing acts as a "pressure gauge" for your architecture. If you need 200 lines of setup to test a 5-line function, your function is too tightly coupled.
-
-## Testing as Safety Net
-The primary value of tests is not finding bugs today; it's preventing **regressions** tomorrow. As a system grows, no single human can hold the entire mental model in their head. Tests allow you to refactor and add features with the "Confidence of a Master," knowing that if you break an existing invariant, the computer will tell you in seconds.
-
-## The Cost of Not Testing
-| Phase | Cost to Fix Bug |
-|-------|-----------------|
-| Development | $1 (Minutes) |
-| CI/Build | $10 (Hours) |
-| Production | $1,000+ (Days + Reputation) |
-
-In modern engineering, automated tests are the "barrier to entry." If a feature isn't tested, it doesn't exist.`
+---`
   },
   {
     id: "11-2",
     number: "11.2",
     title: "The Testing Pyramid: Unit, Integration, End-to-End",
-    content: `Mike Cohn's **Testing Pyramid** is the classic model for balancing different types of tests. It emphasizes having a large base of fast, isolated tests and a small peak of slow, integrated tests.
+    content: `Level
+What It Tests
+Speed
+Quantity
+Coverage Goal
+Unit Tests
+One function in isolation, all dependencies mocked
+< 1ms each
+Hundreds to thousands
+Every function, branch, edge case
+Integration Tests
+Multiple components: code + real database, real cache
+10ms - 1s each
+Dozens to hundreds
+All component boundaries and data contracts
+End-to-End Tests
+Complete user flows through the running system
+Seconds to minutes
+Handful to dozens
+Critical user journeys only
 
-## 1. Unit Tests (The Base)
-- **Scope**: A single function, class, or module in isolation.
-- **Speed**: Milliseconds.
-- **Goal**: Verify logic and edge cases.
-- **Quantity**: Hundreds or thousands.
+⚠️ THE INVERTED PYRAMID ANTI-PATTERN
+Many teams build an inverted pyramid: few unit tests, many E2E tests.
+This is the worst possible outcome:
+E2E tests are slow (minutes per suite run)
+E2E tests are flaky (network, timing, environment issues)
+E2E failures are hard to diagnose (too much happening at once)
+Developers stop running tests because they take too long
 
-## 2. Integration Tests (The Middle)
-- **Scope**: How two or more modules (or a module and a database) work together.
-- **Speed**: Seconds.
-- **Goal**: Verify communication and "plumbing."
-- **Quantity**: Dozens or hundreds.
-
-## 3. End-to-End (E2E) Tests (The Peak)
-- **Scope**: The entire system from the user's perspective (e.g., clicking a button in a browser).
-- **Speed**: Minutes.
-- **Goal**: Verify "User Journeys."
-- **Quantity**: A few critical paths.
-
-## Why the Pyramid Shape?
-The pyramid is shaped by two factors: **Cost** and **Speed**. E2E tests are "brittle" (they break easily when the UI changes) and slow. If you have 1,000 E2E tests, your build will take 5 hours, and no one will run it. If you have 1,000 unit tests, they run in 10 seconds.
-
-The "Pyramid" ensures that most bugs are caught early and cheaply by the fastest tests, leaving only the complex integration issues for the slower layers.`
+The correct shape: 70% unit, 20% integration, 10% E2E.
+If your test suite takes more than 2 minutes: you have inverted it.
+Fast tests get run. Slow tests get skipped.`
   },
   {
     id: "11-3",
     number: "11.3",
     title: "The Testing Trophy: An Updated Model",
-    content: `While the Pyramid is the classic model, Kent C. Dodds popularized the **Testing Trophy**, which argues that for modern web applications, the "middle" (Integration) is actually the most valuable layer.
+    content: `\`\`\`python
+import pytest
+from unittest.mock import Mock
 
-## The Trophy Shape
-1. **Static** (The Base): Linters and Type Checkers (TypeScript, Flow). Catches typos and basic logic errors instantly.
-2. **Unit**: Small, isolated tests for pure logic.
-3. **Integration** (The Wide Body): Tests that span several units but don't require the full system.
-4. **E2E** (The Top): A thin layer of critical path tests.
+# ARRANGE-ACT-ASSERT: every test has exactly three sections
+# ARRANGE: set up inputs, mocks, initial state
+# ACT: execute exactly one thing (the function under test)
+# ASSERT: verify expected outcomes
 
-## Why focus on Integration?
-The argument for the Trophy is that unit tests often "over-mock." If you mock the database, the network, and every other function, your test might pass even if the real system is broken because the "glue" between the parts is where the bugs hide. 
+class PaymentService:
+def __init__(self, stripe_client, db, email_service):
+\`\`\`
 
-Integration tests provide a higher **Return on Investment (ROI)** because they prove that the system actually works, not just that individual functions work in a vacuum.
+self.stripe = stripe_client
+self.db = db
+self.email = email_service
 
-## Which to choose?
-- Use the **Pyramid** for backend systems, libraries, and complex algorithmic code.
-- Use the **Trophy** for frontend applications and microservices where the primary logic is "orchestration" and "data flow" rather than heavy computation.`
+
+\`\`\`python
+def charge_customer(self, customer_id: int, amount_cents: int) -> dict:
+if amount_cents <= 0:
+raise ValueError(f'Amount must be positive, got {amount_cents}')
+customer = self.db.get_customer(customer_id)
+if not customer: raise CustomerNotFoundError(customer_id)
+charge = self.stripe.charge(customer.card_token, amount_cents)
+\`\`\`
+
+self.db.record_transaction(customer_id, amount_cents, charge.id)
+self.email.send_receipt(customer.email, amount_cents, charge.id)
+
+\`\`\`python
+return {'status': 'success', 'charge_id': charge.id}
+
+class TestPaymentService:
+def setup_method(self):
+\`\`\`
+
+self.stripe = Mock()
+self.db = Mock()
+self.email = Mock()
+self.service = PaymentService(self.stripe, self.db, self.email)
+
+
+\`\`\`python
+def test_successful_charge(self):
+# ARRANGE
+customer = Mock(card_token='tok_123', email='user@example.com')
+\`\`\`
+
+self.db.get_customer.return_value = customer
+
+\`\`\`python
+charge = Mock(id='ch_abc456')
+\`\`\`
+
+self.stripe.charge.return_value = charge
+
+\`\`\`python
+# ACT
+result = self.service.charge_customer(customer_id=42, amount_cents=9999)
+# ASSERT
+assert result == {'status': 'success', 'charge_id': 'ch_abc456'}
+\`\`\`
+
+self.stripe.charge.assert_called_once_with('tok_123', 9999)
+self.db.record_transaction.assert_called_once_with(42, 9999, 'ch_abc456')
+self.email.send_receipt.assert_called_once_with('user@example.com', 9999, 'ch_abc456')
+
+
+\`\`\`python
+def test_rejects_zero_amount(self):
+with pytest.raises(ValueError, match='Amount must be positive'):
+\`\`\`
+
+self.service.charge_customer(customer_id=42, amount_cents=0)
+self.stripe.charge.assert_not_called()
+self.db.record_transaction.assert_not_called()
+
+
+\`\`\`python
+def test_raises_when_customer_not_found(self):
+\`\`\`
+
+self.db.get_customer.return_value = None
+
+\`\`\`python
+with pytest.raises(CustomerNotFoundError):
+\`\`\`
+
+self.service.charge_customer(customer_id=99, amount_cents=100)
+self.stripe.charge.assert_not_called()
+
+
+\`\`\`python
+# PARAMETRIZE: test many inputs with one test function
+@pytest.mark.parametrize('email,is_valid', [
+\`\`\`
+
+('user@example.com', True),
+('user+tag@example.co.uk', True),
+('', False),
+('notanemail', False),
+('@example.com', False),
+('user@', False),
+(None, False),
+])
+
+\`\`\`python
+def test_email_validation(email, is_valid):
+assert validate_email(email) == is_valid
+# Generates 7 separate tests from one function
+
+# FIXTURES: reusable test setup
+@pytest.fixture
+def sample_order():
+return Order(id=1001, customer_id=42,
+items=[OrderItem(sku='WIDGET-A', quantity=2, price_cents=999)],
+status='pending')
+
+def test_order_total(sample_order):
+assert sample_order.total_cents == 1998 # 2 x 999
+\`\`\``
   },
   {
     id: "11-4",
     number: "11.4",
     title: "Unit Testing: The ARRANGE-ACT-ASSERT Pattern",
-    content: `To write clean, maintainable tests, we use the **AAA Pattern (Arrange, Act, Assert)**. This provides a consistent structure that makes tests readable.
+    content: `\`\`\`python
+# TESTCONTAINERS: spin up real databases and services in Docker for tests
+# pip install testcontainers
 
-## The Three A's
-1. **Arrange**: Set up the state for the test. Create objects, mock dependencies, and prepare the input data.
-2. **Act**: Call the specific function or method being tested. This should usually be a single line.
-3. **Assert**: Verify that the outcome matches expectations.
+import pytest
+from testcontainers.postgres import PostgresContainer
+from testcontainers.redis import RedisContainer
 
-\`\`\`javascript
-test('calculateDiscount should apply 10% for premium users', () => {
-  // 1. ARRANGE
-  const user = { type: 'premium', id: 1 };
-  const cartTotal = 100;
+@pytest.fixture(scope='session')
+def postgres():
+with PostgresContainer('postgres:15-alpine') as pg:
+yield pg
 
-  // 2. ACT
-  const result = calculateDiscount(user, cartTotal);
+@pytest.fixture(scope='session')
+def redis_cache():
+with RedisContainer('redis:7-alpine') as redis:
+yield redis
 
-  // 3. ASSERT
-  expect(result).toBe(10);
-});
+@pytest.fixture
+def db_connection(postgres):
+conn = psycopg2.connect(postgres.get_connection_url())
+cursor = conn.cursor()
 \`\`\`
 
-## Common Mistakes
-- **Multiple Acts**: If you are acting more than once, you are likely testing multiple things. Break it into two tests.
-- **Logic in Assertions**: Your assertion should be simple. If you need a \`for\` loop in your \`expect\` block, your test is too complex.
-- **Fragile Setup**: If you "Arrange" too much global state, your test will break when unrelated parts of the system change.
+cursor.execute(open('schema.sql').read())
+conn.commit()
 
-By following AAA, someone reading your test can immediately see the **scenario** (Arrange), the **action** (Act), and the **expectation** (Assert).`
+\`\`\`python
+yield conn
+\`\`\`
+
+conn.rollback() # test isolation: rollback after each test
+conn.close()
+
+
+\`\`\`python
+class TestUserRepositoryIntegration:
+def test_create_and_fetch(self, db_connection):
+repo = UserRepository(db_connection)
+request = CreateUserRequest(
+first_name='Alice', last_name='Smith',
+email='alice@example.com', password='securepassword123'
+\`\`\`
+
+)
+
+\`\`\`python
+created = repo.create(request)
+fetched = repo.find_by_id(created.id)
+assert fetched.email == 'alice@example.com'
+assert fetched.first_name == 'Alice'
+
+def test_find_unknown_returns_none(self, db_connection):
+repo = UserRepository(db_connection)
+assert repo.find_by_email('nobody@example.com') is None
+
+def test_duplicate_email_raises(self, db_connection):
+repo = UserRepository(db_connection)
+\`\`\`
+
+repo.create(CreateUserRequest(
+
+\`\`\`python
+first_name='Bob', last_name='Jones',
+email='bob@example.com', password='password123'
+\`\`\`
+
+))
+
+\`\`\`python
+with pytest.raises(DuplicateEmailError):
+\`\`\`
+
+repo.create(CreateUserRequest(
+
+\`\`\`python
+first_name='Robert', last_name='Jones',
+email='bob@example.com', # same email
+password='different123'
+\`\`\`
+
+))`
   },
   {
     id: "11-5",
     number: "11.5",
     title: "Test Doubles: Mocks, Stubs, Fakes, Spies, Dummies",
-    content: `In unit testing, we often need to replace a "real" dependency with a "double" to ensure isolation and speed. Gerard Meszaros defined five types of **Test Doubles**.
+    content: `Test-Driven Development is a discipline where you write the test before you write the code. The cycle: Red (write a failing test), Green (write minimum code to pass), Refactor (clean up while tests stay green). Repeat. TDD forces you to design the API from the caller perspective before implementing it. The result is naturally testable code.
 
-## 1. Dummy
-Objects that are passed around but never actually used. Usually just to fill parameter lists.
+\`\`\`python
+# TDD DEMONSTRATION: password strength validator
 
-## 2. Stub
-Provides "canned" answers to calls made during the test. It doesn't track how many times it was called.
-- \`stub.onCall('getUser').returns({ id: 1 })\`
+# STEP 1 (RED): write the test first — it will fail
+def test_password_too_short_is_weak():
+result = check_password_strength('abc')
+assert result.score == 0
+assert 'at least 8 characters' in result.feedback
 
-## 3. Spy
-A stub that also records information about how it was called (e.g., arguments passed, number of calls).
-- \`expect(emailSpy).toHaveBeenCalledWith('admin@example.com')\`
+# STEP 2 (GREEN): write MINIMUM code to pass this one test
+def check_password_strength(password: str):
+if len(password) < 8:
+return PasswordStrength(score=0, feedback=['Use at least 8 characters'])
+return PasswordStrength(score=1, feedback=[])
 
-## 4. Mock
-A pre-programmed object with expectations of how it should be used. It will fail the test itself if it doesn't receive the expected calls.
+# STEP 3 (REFACTOR): clean up. Then write next test.
 
-## 5. Fake
-A working implementation, but usually with a shortcut that makes it unsuitable for production (e.g., an In-Memory Database).
+# STEP 4 (RED): next requirement
+def test_lowercase_only_password_is_weak():
+result = check_password_strength('abcdefghij')
+assert result.score == 1
+assert any('uppercase' in f.lower() for f in result.feedback)
 
-| Double | Primary Use |
-|--------|-------------|
-| Stub | Providing Input |
-| Spy | Verifying Output/Behavior |
-| Fake | Replacing Infrastructure |
+# STEP 5 (GREEN): extend implementation minimally
+def check_password_strength(password: str):
+score = 0; feedback = []
+if len(password) < 8:
+return PasswordStrength(score=0, feedback=['Use at least 8 characters'])
+\`\`\`
 
-Using the right double is critical. Over-using **Mocks** leads to "Brittle Tests" that break every time you refactor internal code, while **Fakes** are often the best for integration testing.`
+score += 1
+
+\`\`\`python
+if not any(c.isupper() for c in password):
+\`\`\`
+
+feedback.append('Add at least one uppercase letter')
+
+\`\`\`python
+else:
+\`\`\`
+
+score += 1
+
+\`\`\`python
+return PasswordStrength(score=score, feedback=feedback)
+
+# Continue: add tests for digits, special chars, long passwords
+# Each test drives a small focused addition to implementation
+
+# WHY TDD WORKS:
+# Forces API design from the caller perspective before implementation
+# Produces naturally testable code (designed for testing)
+# 100% coverage of intentional behavior by construction
+# Prevents over-engineering (only write code that makes tests pass)
+# Test cases document intended behavior
+\`\`\``
   },
   {
     id: "11-6",
     number: "11.6",
     title: "What to Mock and What Not to Mock",
-    content: `The most common debate in testing is the "Mocking vs. No-Mocking" strategy. 
+    content: `\`\`\`python
+# pip install hypothesis
+from hypothesis import given, strategies as st
 
-## The "London School" (Mockist)
-Mockists believe in mocking almost every dependency of the unit under test. This ensures perfect isolation. If Test A fails, you know for a fact the bug is in Unit A.
+# PROPERTY-BASED TESTING: specify PROPERTIES that must hold for ALL inputs.
+# Hypothesis generates hundreds of random test cases automatically.
 
-## The "Detroit School" (Classicist)
-Classicists prefer to use the "real" versions of other classes where possible, only mocking things that are slow or out of their control (like APIs or Databases).
+@given(st.lists(st.integers()))
+def test_sort_produces_sorted_output(lst):
+result = my_sort(lst)
+assert result == sorted(lst)
 
-## The Gold Standard: Mock the Boundaries
-A good heuristic is to **Mock what you don't own**.
-- **Mock**: Third-party APIs (Stripe, Twilio), Hardware (Printers, Sensors), and Non-deterministic things (Current Time, Random Numbers).
-- **Don't Mock**: Internal logic, data objects (DTOs), and utility functions.
+@given(st.lists(st.integers()))
+def test_sort_preserves_all_elements(lst):
+result = my_sort(lst)
+assert len(result) == len(lst)
+assert sorted(result) == sorted(lst)
 
-## The Dangers of "Mocking the Internals"
-If you mock internal helper functions of a class, your tests become a mirror of the implementation. When you refactor the class to rename a private method, the test fails even if the logic is still correct. This makes tests a **burden** rather than a **benefit**.
+@given(st.lists(st.integers()))
+def test_sort_is_idempotent(lst):
+once = my_sort(lst)
+twice = my_sort(once)
+assert once == twice
 
-**Rule of Thumb**: Test the **behavior**, not the **implementation**. If you can't test a behavior without mocking five internal calls, your unit is likely too large and needs to be decomposed.`
+# HYPOTHESIS FINDS EDGE CASES YOU WOULD NEVER WRITE MANUALLY:
+# Empty strings, very long strings (> 1MB)
+# Unicode edge cases (zero-width spaces, right-to-left marks)
+# Integer boundaries (0, -1, sys.maxsize)
+# Lists with one element, empty, all duplicates
+# NaN and infinity in float inputs
+
+# When Hypothesis finds a failing case, it SHRINKS it automatically:
+# If [1000, -999, 0, 42, 7] fails, it tries to find simplest failing case.
+# Result: maybe just [-1] or [0, 0] — minimal reproducer automatically.
+
+# STATEFUL TESTING: test sequences of operations
+from hypothesis.stateful import RuleBasedStateMachine, rule, invariant
+
+class BankAccountMachine(RuleBasedStateMachine):
+def __init__(self):
+super().__init__()
+\`\`\`
+
+self.account = BankAccount(initial_balance=0)
+self.model_balance = 0
+
+
+\`\`\`python
+@rule(amount=st.integers(min_value=1, max_value=10000))
+def deposit(self, amount):
+\`\`\`
+
+self.account.deposit(amount)
+self.model_balance += amount
+
+
+\`\`\`python
+@rule(amount=st.integers(min_value=1, max_value=10000))
+def withdraw_if_possible(self, amount):
+if amount <= self.model_balance:
+\`\`\`
+
+self.account.withdraw(amount)
+self.model_balance -= amount
+
+
+\`\`\`python
+@invariant()
+def balance_matches_model(self):
+assert self.account.balance == self.model_balance
+
+@invariant()
+def balance_never_negative(self):
+assert self.account.balance >= 0
+
+TestBankAccount = BankAccountMachine.TestCase
+\`\`\``
   },
   {
     id: "11-7",
     number: "11.7",
     title: "Test-Driven Development: Red-Green-Refactor",
-    content: `**Test-Driven Development (TDD)** is a workflow where you write the test *before* the implementation code. It follows a strict three-step cycle:
+    content: `\`\`\`python
+# MEASURING COVERAGE: pytest-cov
+# $ pytest --cov=mypackage --cov-report=html --cov-report=term-missing
 
-## 1. Red (Fail)
-Write a small test for a piece of functionality that doesn't exist yet. Run the test and watch it fail. This confirms that the test is actually checking something and that the system isn't "falsely passing."
+# COVERAGE TYPES:
+# Line coverage: which lines executed (common, weak)
+# Branch coverage: which if/else branches taken (stronger)
+# Path coverage: all execution paths (expensive, impractical at scale)
 
-## 2. Green (Pass)
-Write the **minimum amount of code** necessary to make the test pass. Don't worry about elegance or performance at this stage. Just make it green.
+# WHAT 100% COVERAGE DOES NOT MEAN:
+def divide(a, b): return a / b # 100% line coverage with one test
+def test_divide(): assert divide(10, 2) == 5.0
+# Missed: division by zero, negative numbers, very large numbers
+# 100% coverage is necessary but NOT sufficient for correctness
 
-## 3. Refactor (Clean)
-Now that you have a passing test (your safety net), clean up the code. Apply the principles from Chapter 9: improve naming, remove duplication, and ensure single responsibility. Run the test again to ensure it stays green.
+# RECOMMENDED COVERAGE TARGETS:
+# Critical business logic: 95-100% branch coverage
+# General application code: 80% line coverage minimum
+# Infrastructure/glue code: 60-70% acceptable
+# Generated code: exclude from measurement
 
-## The Psychology of TDD
-TDD shifts your focus from "how to build it" to "how it should be used." This leads to better APIs and simpler designs. It also provides a constant stream of "small wins" (seeing the test turn green), which keeps developer motivation high.
+# MUTATION TESTING: stronger than coverage
+# pip install mutmut
+# mutmut systematically changes your code:
+# Flips > to >=, changes True to False, removes return statements
+# Checks if your tests catch each change (kill the mutant)
 
-TDD is not about testing; it is a **design process**. By writing the test first, you are forced to define the interface and the requirements clearly before you get bogged down in implementation details.`
+# If mutmut changes > to >= and tests still pass:
+# Your tests are missing a boundary condition test.
+# Mutation score > 80% indicates genuinely effective tests.
+
+# WHAT TO TEST vs NOT TEST:
+# TEST: business logic, all error paths, boundary conditions,
+# complex algorithms, data transformations
+# SKIP: trivial getters/setters, framework internals,
+# private implementation details, logging statements,
+# third-party library behavior
+\`\`\``
   },
   {
     id: "11-8",
     number: "11.8",
     title: "TDD Benefits: Design, Documentation, and Confidence",
-    content: `Many developers see TDD as "slower" because you write more code upfront. However, over the lifecycle of a project, TDD is almost always faster.
-
-## 1. Better Design
-Because you write the calling code first, you naturally design for **low coupling** and **high cohesion**. You can't write a test for a "spaghetti" function, so TDD forces you to avoid writing spaghetti in the first place.
-
-## 2. Zero-Drift Documentation
-The tests serve as a specification that never lies. New developers can read the tests to understand exactly what the system is supposed to do.
-
-## 3. The "Friday Night" Confidence
-With a comprehensive TDD-backed test suite, you can deploy a major refactor on a Friday afternoon and go home without worry. You have a mathematical proof (within the limits of your tests) that the system still works.
-
-## 4. Reduced Debugging
-In TDD, when a test fails, you know the bug is in the last 5 lines of code you wrote. You rarely need to use a debugger because the "search space" for bugs is tiny.
-
-| Metric | Without TDD | With TDD |
-|--------|-------------|----------|
-| Development Speed (Initial) | High | Medium |
-| Development Speed (Maintenance) | Low (Technical Debt) | High |
-| Bug Density | Higher | Lower |
-| Design Quality | Variable | High |`
+    content: `TEST SUITE: Build a complete test suite for a stack (push, pop, peek, is_empty, size). Cover: normal operations, empty stack, single element, large count, pop from empty. Achieve 100% branch coverage. Add Hypothesis property tests verifying LIFO invariant.
+TDD EXERCISE: Use TDD to build a Roman numeral converter (integer to Roman, Roman to integer). Write tests first for single digits, subtractive notation (IV=4, IX=9), combinations (MCMXCIX=1999). Each test must fail before implementation.
+INTEGRATION TESTS: Using Testcontainers, write integration tests for user authentication: register, login (success and failure), token validation, password reset. Use real PostgreSQL and Redis. Each test must be fully isolated.
+PROPERTY-BASED TESTING: Use Hypothesis to test a JSON serializer/deserializer (roundtrip), a URL builder (roundtrip parse), and a sorting algorithm. Find at least one bug in each using Hypothesis.
+MUTATION TESTING: Install mutmut. Run on a function with 90%+ line coverage. Report: total mutants, killed, surviving. For each surviving mutant, write a new test that kills it.
+Chapter 11 — Ten Testing Truths
+Tests enable change, not just catch bugs. A test suite is what lets you refactor, optimize, and extend confidently at any speed.
+The testing pyramid: 70% unit, 20% integration, 10% E2E. Inverting it produces slow, flaky suites that developers stop running.
+Every unit test follows Arrange-Act-Assert. One setup, one action, one or more assertions. Tests with multiple actions test multiple things.
+Parametrize tests to cover many inputs without duplicating logic. pytest.mark.parametrize runs the same test with different data efficiently.
+Integration tests need real dependencies. Use Testcontainers to run actual PostgreSQL and Redis in Docker for integration tests.
+TDD produces naturally testable code because you design the API from the caller perspective before implementing it. Red-Green-Refactor.
+Property-based testing with Hypothesis finds edge cases you would never write manually and shrinks failures to minimal reproducers automatically.
+100% line coverage does not mean no bugs. Coverage finds untested code. Mutation testing finds ineffective tests. Use both.
+Do not test private implementation details — they must be free to change. Test public API contracts and observable behavior only.
+Fast test suites get run. Slow suites get skipped. Keep unit suite under 30 seconds. Keep full suite under 5 minutes.`
   },
   {
     id: "11-9",
