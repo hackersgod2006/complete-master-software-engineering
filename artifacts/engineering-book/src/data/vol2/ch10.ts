@@ -5,197 +5,407 @@ export const CH10_SECTIONS: Section[] = [
     id: "10-1",
     number: "10.1",
     title: "The Three Categories of Errors",
-    content: `Not all errors are created equal. To build resilient systems, we must first classify the "failure modes" we encounter. In software engineering, errors generally fall into three distinct categories, each requiring a different strategic response.
+    content: `Error handling is not an afterthought. It is not the catch block you add after the code works. It is a first-class architectural concern that determines whether your system is reliable or fragile, debuggable or opaque, recoverable or permanently broken.
+The engineers who build robust production systems think about failure before they think about the happy path. They ask: what happens when this database times out? What happens when this API returns 500? What happens when this file does not exist? The answers to these questions are as important as the answers to the happy-path questions.
 
-## 1. User Errors (Expected Failures)
-These are failures caused by invalid input or environment states that are outside the program's control but within its "prediction horizon."
-- **Examples**: Invalid password, file not found, network timeout.
-- **Handling**: These should be handled gracefully. They are not "bugs"; they are expected branches of logic. The user should be informed with a clear message, and the system should continue running.
 
-## 2. Programmer Errors (Bugs)
-These are failures caused by incorrect logic or broken assumptions in the code itself.
-- **Examples**: Null pointer dereference, array index out of bounds, dividing by zero (where the divisor is calculated by the program).
-- **Handling**: These should **not** be handled gracefully in the traditional sense. You cannot "recover" from a logic error because the program's state is now undefined. The correct response is often to crash (Fail-Fast) so the developer can fix the underlying cause.
-
-## 3. Environmental/Resource Errors (Catastrophic Failures)
-These are failures where the underlying infrastructure fails.
-- **Examples**: Out of memory (OOM), disk full, hardware failure.
-- **Handling**: These are often unrecoverable. The best strategy is to ensure the system fails safely (e.g., closing database connections, flushing logs) and triggers an alert for human intervention.
-
-| Category | Cause | Strategy |
-|----------|-------|----------|
-| User | Input | Validation & Reporting |
-| Programmer | Logic | Fail-Fast & Debug |
-| Environmental | Infrastructure | Alerting & Safe Shutdown |
-
-Understanding which category an error belongs to prevents the common mistake of trying to "catch" programmer errors with try-catch blocks, which only hides the bug and allows the system to continue in a corrupted state.`
+---`
   },
   {
     id: "10-2",
     number: "10.2",
     title: "Fail-Fast: The Most Important Principle",
-    content: `The **Fail-Fast** principle states that a system should stop operation immediately when an error is detected. While it sounds counter-intuitive (shouldn't we keep the app running for the user?), it is the most effective way to prevent data corruption and reduce debugging time.
+    content: `Category
+Definition
+Examples
+Correct Response
+Recoverable
+Normal part of correct program operation
+File not found, network timeout, invalid input, rate limit
+Handle gracefully: retry, return error, use fallback
+Programming Bug
+Caused by incorrect code — should never happen
+Null pointer, array out of bounds, invalid state
+Fail fast: crash loudly, log everything, alert engineers
+Environmental
+From environment beyond program control
+Out of memory, disk full, hardware failure
+Fail safely: save state, clean up resources, exit cleanly
 
-## The Danger of "Fail-Silent"
-When a program encounters an error but continues to run, it enters an **undefined state**. 
-- A calculation might use a \`null\` value that was cast to \`0\`.
-- A database write might be skipped, but the system proceeds as if it succeeded.
-- This creates a "time bomb" where the actual crash happens much later—and far away from the original cause—making it nearly impossible to debug.
-
-## Implementation: Assertions and Guards
-Fail-Fast is implemented using **Guard Clauses** and **Assertions**.
 
 \`\`\`python
-def process_payment(amount, currency):
-    # Fail-Fast: Guard Clause
-    if amount <= 0:
-        raise ValueError("Amount must be positive")
-    
-    # Intrinsic Logic
-    # ...
+import requests, logging, signal, sys
+from typing import Optional
+
+logger = logging.getLogger(__name__)
+
+# CATEGORY 1: RECOVERABLE — handle gracefully
+def fetch_user_profile(user_id: int) -> Optional[dict]:
+try:
+response = requests.get(
 \`\`\`
 
-## The Benefits
-1. **Immediate Feedback**: The developer sees the error the moment it happens.
-2. **Clear Stack Traces**: The error is reported at the source, not 10 layers deep.
-3. **Data Integrity**: You stop the system before it can write corrupted data to a permanent store.
+f'https://api.example.com/users/{user_id}',
 
-Fail-Fast is about **honesty** in engineering. It is better to have a system that crashes than a system that lies to you.`
+\`\`\`python
+timeout=5.0
+\`\`\`
+
+)
+
+\`\`\`python
+if response.status_code == 404:
+return None # not found: recoverable
+\`\`\`
+
+response.raise_for_status()
+
+\`\`\`python
+return response.json()
+except requests.Timeout:
+\`\`\`
+
+logger.warning(f'Timeout fetching user {user_id}')
+
+\`\`\`python
+return None
+except requests.ConnectionError as e:
+\`\`\`
+
+logger.error(f'Connection error fetching user {user_id}: {e}')
+
+\`\`\`python
+return None
+# Do NOT catch Exception broadly — let unexpected errors propagate
+
+# CATEGORY 2: PROGRAMMING ERRORS — fail fast, never swallow
+def calculate_average(numbers: list) -> float:
+if not numbers:
+raise ValueError('Cannot calculate average of empty list')
+if not all(isinstance(n, (int, float)) for n in numbers):
+raise TypeError(f'All elements must be numeric')
+return sum(numbers) / len(numbers)
+
+# WHAT NOT TO DO — the most dangerous pattern in software:
+def calculate_average_dangerous(numbers):
+try:
+return sum(numbers) / len(numbers)
+except:
+return 0 # TERRIBLE: silently returns wrong answer
+# This hides bugs. Caller never knows something went wrong.
+# 'Average of empty list = 0' may cause critical downstream errors.
+
+# CATEGORY 3: ENVIRONMENTAL — save state, exit cleanly
+def handle_sigterm(signum, frame):
+\`\`\`
+
+'''Graceful shutdown — Kubernetes sends SIGTERM before killing pod.'''
+logger.info('SIGTERM received. Finishing current requests...')
+server.stop_accepting_new_requests()
+server.wait_for_active_requests(timeout=30)
+db_pool.close_all_connections()
+logger.info('Clean shutdown complete.')
+sys.exit(0)
+
+signal.signal(signal.SIGTERM, handle_sigterm)`
   },
   {
     id: "10-3",
     number: "10.3",
     title: "Exception Design: When to Throw, What to Throw",
-    content: `Exceptions are a powerful mechanism for non-local error handling, but they are often abused as a form of "hidden GOTO." 
+    content: `\`\`\`python
+# DESIGN YOUR OWN EXCEPTION HIERARCHY
+# Structured exceptions with context make debugging fast
 
-## When to Throw
-Exceptions should be reserved for **exceptional** circumstances. If a function is called \`findUserByEmail(email)\`, and the user is not found, is that an exception? Usually, no. It's a valid result. However, if \`findUserByEmail\` cannot connect to the database, *that* is an exception.
-
-## What to Throw
-Never throw generic types like \`Exception\`, \`Error\`, or \`RuntimeException\`. Always create or use **specific** exception types.
-- **Bad**: \`throw new Exception("Error!");\`
-- **Good**: \`throw new UserAuthenticationException("Invalid credentials");\`
-
-Specific exceptions allow calling code to catch only the errors they know how to handle, while letting others bubble up to a global handler.
-
-## Hierarchy and Metadata
-Good exceptions carry **context**.
-- **Message**: A human-readable description (for developers, not necessarily users).
-- **Code**: A unique identifier for the error type.
-- **Data**: Contextual information (e.g., the ID of the resource that wasn't found).
-
-\`\`\`javascript
-class DatabaseError extends Error {
-  constructor(message, query, params) {
-    super(message);
-    this.name = "DatabaseError";
-    this.query = query;
-    this.params = params;
-  }
-}
+class AppError(Exception):
+def __init__(self, message: str, error_code: str = None, context: dict = None):
+super().__init__(message)
 \`\`\`
 
-## The Cost of Exceptions
-In many languages (like Java or C#), creating an exception is expensive because the runtime must capture the entire **stack trace**. If you use exceptions for normal control flow, you will severely degrade the performance of your application.`
+self.error_code = error_code or 'APP_ERROR'
+self.context = context or {}
+self.message = message
+
+
+\`\`\`python
+def to_dict(self) -> dict:
+return {'error': self.error_code, 'message': self.message, 'context': self.context}
+
+class ValidationError(AppError):
+def __init__(self, field: str, reason: str, value=None):
+super().__init__(
+message=f"Validation failed for '{field}': {reason}",
+error_code='VALIDATION_ERROR',
+context={'field': field, 'reason': reason, 'value': str(value)}
+\`\`\`
+
+)
+self.field = field
+
+
+\`\`\`python
+class NotFoundError(AppError):
+def __init__(self, resource_type: str, identifier):
+super().__init__(
+message=f"{resource_type} '{identifier}' not found",
+error_code='NOT_FOUND',
+context={'resource_type': resource_type, 'identifier': str(identifier)}
+\`\`\`
+
+)
+
+
+\`\`\`python
+class AuthorizationError(AppError):
+def __init__(self, user_id: int, action: str, resource: str):
+super().__init__(
+message=f'User {user_id} cannot {action} {resource}',
+error_code='FORBIDDEN',
+context={'user_id': user_id, 'action': action, 'resource': resource}
+\`\`\`
+
+)
+
+
+\`\`\`python
+# Usage — clean, informative, structured:
+def transfer_funds(from_account_id: int, to_account_id: int, amount: float):
+if amount <= 0:
+raise ValidationError('amount', 'must be positive', amount)
+account = db.get_account(from_account_id)
+if not account:
+raise NotFoundError('Account', from_account_id)
+if account.balance < amount:
+raise ValidationError('amount', f'exceeds balance {account.balance}', amount)
+if not current_user.can_access(from_account_id):
+raise AuthorizationError(current_user.id, 'transfer_from', f'account {from_account_id}')
+
+# API layer maps exceptions to HTTP status codes:
+def api_transfer(request):
+try:
+result = transfer_funds(**request.json)
+return JsonResponse(result, status=200)
+except ValidationError as e: return JsonResponse(e.to_dict(), status=400)
+except NotFoundError as e: return JsonResponse(e.to_dict(), status=404)
+except AuthorizationError as e: return JsonResponse(e.to_dict(), status=403)
+except AppError as e:
+\`\`\`
+
+logger.error('Unhandled app error', extra=e.context)
+
+\`\`\`python
+return JsonResponse({'error': 'Internal error'}, status=500)
+\`\`\``
   },
   {
     id: "10-4",
     number: "10.4",
     title: "Error Propagation: Checked vs Unchecked vs Result Types",
-    content: `How does an error travel from the point of origin to the point of handling? This is the problem of **propagation**.
+    content: `\`\`\`python
+import time, random, functools, threading
+from enum import Enum
 
-## 1. Checked Exceptions (Java)
-Checked exceptions force the caller to either catch the exception or declare it in their own method signature. 
-- **Pro**: The compiler ensures errors aren't ignored.
-- **Con**: Leads to "Exception Swallowing" (empty catch blocks) and "Signature Pollution" where every function ends with \`throws IOException, SQLException, etc.\`.
+def retry(max_attempts=3, initial_delay=1.0, backoff_factor=2.0,
+jitter=True, exceptions=(Exception,)):
+\`\`\`
 
-## 2. Unchecked Exceptions (C#, Python, JS)
-Unchecked exceptions don't need to be declared.
-- **Pro**: Cleaner code, less boilerplate.
-- **Con**: It's easy to forget that a function might throw, leading to unexpected crashes in production.
+'''
+Exponential backoff retry decorator.
+Jitter prevents thundering herd: all retriers hitting
+the recovering server at the same instant.
+'''
 
-## 3. Result Types (Rust, Go)
-Instead of jumping control flow, the error is returned as a **value**.
-- **Go**: \`val, err := doSomething()\`
-- **Rust**: \`let result: Result<T, E> = do_something();\`
+\`\`\`python
+def decorator(func):
+@functools.wraps(func)
+def wrapper(*args, **kwargs):
+delay = initial_delay
+last_exc = None
+for attempt in range(1, max_attempts + 1):
+try:
+return func(*args, **kwargs)
+except exceptions as e:
+last_exc = e
+if attempt == max_attempts: break
+actual = delay * (0.5 + random.random()) if jitter else delay
+\`\`\`
 
-## The Modern Consensus
-The industry is moving away from Checked Exceptions and toward **Result Types** or **Unchecked Exceptions with explicit documentation**. Result types are increasingly favored because they make the failure path a "first-class citizen" of the function signature. You can't get the value without acknowledging the error.
+logger.warning(f'{func.__name__} attempt {attempt} failed: {e}. Retry in {actual:.1f}s')
+time.sleep(actual)
+delay *= backoff_factor
 
-| Model | Visibility | Enforcement |
-|-------|------------|-------------|
-| Checked | High | Compile-time |
-| Unchecked | Low | None |
-| Result Type | High | Compile-time (Pattern Matching) |
+\`\`\`python
+raise last_exc
+return wrapper
+return decorator
 
-The key is **consistency**. Choose a propagation model and stick to it across your entire architecture.`
+@retry(max_attempts=3, initial_delay=1.0, backoff_factor=2.0,
+exceptions=(requests.Timeout, requests.ConnectionError))
+def fetch_payment_status(payment_id: str) -> dict:
+response = requests.get(f'/payments/{payment_id}', timeout=5)
+\`\`\`
+
+response.raise_for_status()
+
+\`\`\`python
+return response.json()
+# Retries: immediately, after ~1s, after ~2s. Then raises.
+
+# CIRCUIT BREAKER: prevents cascading failures
+# CLOSED: normal operation
+# OPEN: failing fast (not calling service)
+# HALF_OPEN: testing if service recovered
+
+class CircuitState(Enum):
+CLOSED = 'closed'
+OPEN = 'open'
+HALF_OPEN = 'half_open'
+
+class CircuitBreaker:
+def __init__(self, failure_threshold=5, recovery_timeout=60):
+\`\`\`
+
+self.failure_threshold = failure_threshold
+self.recovery_timeout = recovery_timeout
+self.failure_count = 0
+self.last_failure_time = None
+self.state = CircuitState.CLOSED
+self._lock = threading.Lock()
+
+
+\`\`\`python
+def call(self, func, *args, **kwargs):
+with self._lock:
+if self.state == CircuitState.OPEN:
+elapsed = time.time() - self.last_failure_time
+if elapsed >= self.recovery_timeout:
+\`\`\`
+
+self.state = CircuitState.HALF_OPEN
+
+\`\`\`python
+else:
+raise Exception(f'Circuit open. Retry in {self.recovery_timeout - elapsed:.0f}s')
+try:
+result = func(*args, **kwargs)
+with self._lock:
+\`\`\`
+
+self.failure_count = 0
+self.state = CircuitState.CLOSED
+
+\`\`\`python
+return result
+except Exception as e:
+with self._lock:
+\`\`\`
+
+self.failure_count += 1
+self.last_failure_time = time.time()
+
+\`\`\`python
+if self.failure_count >= self.failure_threshold:
+\`\`\`
+
+self.state = CircuitState.OPEN
+logger.error(f'Circuit opened after {self.failure_count} failures')
+raise`
   },
   {
     id: "10-5",
     number: "10.5",
     title: "Error Handling in Python: The Hierarchy and Best Practices",
-    content: `Python uses a "Try-Except" model and follows the philosophy of **EAFP** (Easier to Ask for Forgiveness than Permission).
+    content: `\`\`\`python
+import logging, json, traceback
+from datetime import datetime
 
-## EAFP vs LBYL
-- **LBYL (Look Before You Leap)**: \`if os.path.exists(f): open(f)\`
-- **EAFP**: \`try: open(f) except FileNotFoundError: ...\`
-Python prefers EAFP because it avoids race conditions (the file could be deleted between the check and the open) and is generally more idiomatic.
-
-## The Exception Hierarchy
-All exceptions in Python inherit from \`BaseException\`, but you should always inherit from \`Exception\`.
-- \`SystemExit\`, \`KeyboardInterrupt\`: High-level system events.
-- \`Exception\`: The base for almost all application-level errors.
-
-## Best Practices
-1. **Narrow Scopes**: Keep the \`try\` block as small as possible.
-2. **Specific Exceptions**: Never use \`except:\` (naked except) or \`except Exception:\`. It will catch things you didn't intend to, like \`KeyboardInterrupt\`.
-3. **The \`finally\` and \`else\` clauses**: 
-   - \`else\`: Runs if the try block succeeded. Use it for logic that should only happen if no exception occurred.
-   - \`finally\`: Always runs. Use it for cleanup (closing files, DB connections).
-
-\`\`\`python
-try:
-    data = fetch_from_api()
-except ConnectionError:
-    log.error("Network down")
-else:
-    process(data)
-finally:
-    api.close_connection()
+class StructuredLogger:
+def __init__(self, name: str, service: str):
 \`\`\`
 
-Python's error handling is elegant but requires discipline. Without specific exception types, \`try-except\` blocks quickly become a source of hidden bugs.`
+self.logger = logging.getLogger(name)
+self.service = service
+
+
+\`\`\`python
+def _log(self, level: str, message: str, **context):
+entry = {
+\`\`\`
+
+'timestamp': datetime.utcnow().isoformat() + 'Z',
+'level': level,
+'service': self.service,
+'message': message,
+**context
+}
+
+\`\`\`python
+getattr(self.logger, level.lower())(json.dumps(entry))
+
+def info(self, message, **ctx): self._log('INFO', message, **ctx)
+def warning(self, message, **ctx): self._log('WARNING', message, **ctx)
+def error(self, message, **ctx): self._log('ERROR', message, **ctx)
+
+def exception(self, message, exc, **ctx):
+\`\`\`
+
+self._log('ERROR', message,
+
+\`\`\`python
+exception_type=type(exc).__name__,
+exception_message=str(exc),
+traceback=traceback.format_exc(),
+\`\`\`
+
+**ctx)
+
+
+\`\`\`python
+# LOG LEVELS — use correctly:
+# DEBUG: detailed diagnostic (disabled in production)
+# INFO: confirmation things work: 'Order 1001 payment confirmed'
+# WARNING: unexpected but recoverable: 'Retrying request (attempt 2/3)'
+# ERROR: serious problem: 'Payment failed for order 1001: card declined'
+# CRITICAL: catastrophic: 'DB connection pool exhausted — all requests failing'
+
+# ALWAYS LOG:
+# All external API calls (request_id, duration_ms, status)
+# All auth decisions (user_id, action, resource, granted/denied)
+# All state transitions (order created, payment processed)
+# All errors with full context (user_id, request_id, inputs)
+
+# NEVER LOG:
+# Passwords, tokens, credit card numbers (even masked)
+# PII unless required and properly protected
+# Sensitive query parameters in URLs
+\`\`\``
   },
   {
     id: "10-6",
     number: "10.6",
     title: "Error Handling in Java: Exceptions Done Right",
-    content: `Java's exception system is the most rigorous in the industry, distinguishing between **Checked Exceptions**, **Unchecked Exceptions (RuntimeExceptions)**, and **Errors**.
+    content: `ERROR TAXONOMY: Find 10 exception handlers in any open-source Python project. Classify each as Category 1 (recoverable), 2 (programming bug), or 3 (environmental). Identify 3 that are misclassified. Write the correct handler for each misclassified one.
+EXCEPTION HIERARCHY: Design a complete exception hierarchy for an e-commerce API covering: validation, authentication, authorization, not found, payment, inventory, shipping, external services. Each exception must carry structured context. Write the API layer mapping each to HTTP status codes.
+RETRY DECORATOR: Implement the retry decorator. Add: maximum total retry time, specific retry conditions (only retry on HTTP 429 and 503), callback on each retry for metrics. Test with a mock failing 3 times then succeeding.
+CIRCUIT BREAKER: Implement CircuitBreaker with metrics (total calls, failures, circuit opens). Add health check endpoint returning circuit state. Test: opens after threshold, stays open during recovery_timeout, closes after successful half-open test.
+STRUCTURED LOGGING: Add structured JSON logging to a web application. Every request logs: request_id, path, method, user_id, duration_ms, status_code. Every error logs all request fields plus exception_type, traceback, and business context.
+Chapter 10 — Ten Error Handling Truths
+Every error is either recoverable, a programming bug, or environmental. Treat each category differently. Never treat all errors the same.
+Broad exception catches (except Exception: pass) are the most dangerous pattern in software. They hide bugs and destroy debuggability.
+Exception hierarchies with structured context make debugging fast. Always include: what failed, why, what the inputs were.
+Never return None to signal error without contract. Either raise an exception or use a Result type. Callers forget to check None.
+Retry with exponential backoff and jitter is correct for transient failures. Jitter prevents thundering herd on recovering services.
+Circuit Breaker prevents cascading failures. When a service is down, fail fast instead of queuing retries that exhaust your thread pool.
+Structured logging (JSON) is mandatory in production. Log enough context to reproduce bugs without adding instrumentation after the fact.
+Logs must never contain passwords, tokens, or PII. Even masked versions can sometimes be reversed. Treat log files as potentially public.
+Graceful shutdown handling (SIGTERM) is mandatory for production services. Kubernetes sends SIGTERM before killing pods.
+The worst error handling pattern: catch exception, log it, return default value, continue. This creates invisible data corruption.
 
-## The Java Trinity
-1. **Checked Exceptions (\`Exception\`)**: Represent conditions that a reasonable application might want to catch. (e.g., \`IOException\`).
-2. **Unchecked Exceptions (\`RuntimeException\`)**: Represent programmer errors. (e.g., \`NullPointerException\`, \`IndexOutOfBoundsException\`).
-3. **Errors (\`Error\`)**: Serious problems that a reasonable application should not try to catch (e.g., \`OutOfMemoryError\`).
+CHAPTER 11
+TESTING: THE SCIENCE OF CONFIDENCE
+How to Build Software You Can Confidently Change, Deploy, and Extend
 
-## The "Anti-Patterns" to Avoid
-- **Swallowing Exceptions**: \`catch (Exception e) {}\`. This is a crime in software engineering. If you can't handle it, don't catch it.
-- **Throwing Generic \`Exception\`**: This forces the caller to catch *everything*, including runtime bugs.
-- **Using Exceptions for Control Flow**: Using a \`NoSuchElementException\` to end a loop is roughly 100x slower than a simple \`if\` check.
-
-## Try-With-Resources
-Introduced in Java 7, this is the gold standard for resource management. It ensures that any object implementing \`AutoCloseable\` is closed automatically, even if an exception occurs.
-
-\`\`\`java
-try (BufferedReader br = new BufferedReader(new FileReader(path))) {
-    return br.readLine();
-} catch (IOException e) {
-    logger.error("Failed to read file", e);
-    throw new ApplicationException("Configuration missing", e);
-}
-\`\`\`
-
-## Exception Chaining
-When catching an exception and re-throwing a new one, **always** include the original exception as the "cause." This preserves the stack trace and makes debugging possible. (\`new ApplicationException("msg", originalException)\`).`
+"Code without tests is broken code, we just do not know where or when." — Michael Feathers`
   },
   {
     id: "10-7",
