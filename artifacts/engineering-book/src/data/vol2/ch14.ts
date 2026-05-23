@@ -5,188 +5,565 @@ export const CH14_SECTIONS: Section[] = [
     id: "14-1",
     number: "14.1",
     title: "The Performance Mindset: Measure First, Always",
-    content: `The first rule of **Performance Engineering** is: "Don't guess." Human intuition is remarkably bad at identifying bottlenecks in complex systems. We often spend days optimizing a function that accounts for only 0.1% of execution time, while ignoring the 90% bottleneck right next to it.
+    content: `Performance engineering is not about making every line of code as fast as possible. It is about ensuring the system is fast enough where it matters, for the users who experience it, under the load it actually receives. The engineer who optimizes everything equally is wasting time. The engineer who measures first and optimizes only the bottleneck is using engineering judgment.
+The single most important rule in performance engineering: measure before you optimize. This is not just advice — it is a requirement. Every performance optimization that is not preceded by measurement is a guess. Guesses are usually wrong. The bottleneck is almost never where you think it is, and optimizing the wrong thing wastes time while users continue to suffer.
+Amdahl's Law makes this mathematically precise: if 90% of program time is in function A and 10% in function B, and you make B infinitely fast, the program is only 11% faster overall. Making A twice as fast makes the program 1.82x faster. You must find the actual bottleneck and fix it — nothing else delivers significant improvement.
 
-## The Measurement-Driven Cycle
-Performance engineering is a scientific process:
-1. **Establish a Baseline**: Measure the system as it is.
-2. **Profile**: Use tools to find where the time or resources are actually going.
-3. **Hypothesize**: Formulate a theory about why a specific part is slow.
-4. **Experiment**: Apply an optimization.
-5. **Verify**: Measure again. If the baseline didn't improve significantly, **discard the change**.
 
-## The Trap of Premature Optimization
-Donald Knuth famously said, "Premature optimization is the root of all evil." This doesn't mean you should write slow code. It means you shouldn't add complexity (like custom caching or assembly code) until you have evidence that it's necessary. Clean, readable code is often easier for a compiler or JIT (Just-In-Time) engine to optimize anyway.
-
-## Amdahl's Law
-Amdahl's Law provides the mathematical limit of any optimization. If you optimize a part of a program that takes 10% of the time to be 10x faster, the total speedup is only about 9%. If you optimize the part that takes 80% to be 2x faster, the total speedup is 40%. **Focus on the 80%.**
-
----
-**Key Insight**: Performance is a feature, but it's often the most expensive feature to implement. Always ask: "What is the performance budget for this operation?" If 100ms is acceptable and you're at 80ms, your time is better spent elsewhere.`
+---`
   },
   {
     id: "14-2",
     number: "14.2",
     title: "Profiling Tools: cProfile, perf, VisualVM, pprof, async-profiler",
-    content: `A **Profiler** is a tool that monitors your program's execution and records how much time and resources each part consumes.
+    content: `\`\`\`python
+import cProfile, pstats, io, time
+from functools import wraps
 
-## Sampling vs. Instrumentation
-- **Instrumentation**: The profiler modifies your code (or the bytecode) to record every single function entry and exit. This is highly accurate but adds significant overhead (often 10x slower), which can distort results.
-- **Sampling**: The profiler periodically (e.g., 100 times per second) interrupts the CPU to see what function is currently running. This has very low overhead (1-5%) and is usually sufficient for finding bottlenecks.
+# PYTHON PROFILING: cProfile (CPU time)
 
-## The Toolbelt
-- **Python (cProfile)**: A built-in deterministic profiler. Good for finding which Python functions are slow, but doesn't see into C extensions or the kernel.
-- **Linux (perf)**: The "Gold Standard" for system-level profiling. It can profile anything from application code to the Linux kernel itself. It uses CPU hardware counters.
-- **JVM (VisualVM, async-profiler)**: \`async-profiler\` is essential for Java because it avoids the "Safepoint Bias" that plagues older JVM profilers, providing an accurate view of where the JIT is spending time.
-- **Go (pprof)**: Built directly into the Go runtime. It provides CPU, heap, and goroutine profiling with minimal setup.
+# METHOD 1: Profile a specific function
+def profile_function(func, *args, **kwargs):
+pr = cProfile.Profile()
+\`\`\`
 
-## When to Profile?
-Profile in an environment that matches production as closely as possible. Profiling on a MacBook with 8 cores and 64GB of RAM will give very different results than a t3.micro instance in AWS. Always use "Production-like" data; logic that is fast with 10 items may behave very differently with 10 million.`
+pr.enable()
+
+\`\`\`python
+result = func(*args, **kwargs)
+\`\`\`
+
+pr.disable()
+
+
+\`\`\`python
+s = io.StringIO()
+ps = pstats.Stats(pr, stream=s).sort_stats('cumulative')
+\`\`\`
+
+ps.print_stats(20) # top 20 functions by cumulative time
+
+\`\`\`python
+print(s.getvalue())
+return result
+
+# METHOD 2: Profile entire program from command line
+# $ python -m cProfile -s cumulative myprogram.py
+# Output shows: ncalls, tottime, percall, cumtime, filename:lineno(function)
+
+# METHOD 3: Decorator for profiling specific functions
+def profile(func):
+@wraps(func)
+def wrapper(*args, **kwargs):
+pr = cProfile.Profile()
+\`\`\`
+
+pr.enable()
+
+\`\`\`python
+result = func(*args, **kwargs)
+\`\`\`
+
+pr.disable()
+pr.print_stats(sort='cumulative')
+
+\`\`\`python
+return result
+return wrapper
+
+@profile
+def expensive_function(data):
+return process(data)
+
+# METHOD 4: line_profiler — line-by-line timing
+# pip install line_profiler
+# @profile decorator (not the one above — line_profiler's own)
+# $ kernprof -l -v myscript.py
+# Output: time per LINE inside the decorated function
+# Use when cProfile shows a function is slow but you need to know which line
+
+# METHOD 5: memory_profiler — memory usage per line
+# pip install memory_profiler
+# @profile decorator
+# $ python -m memory_profiler myscript.py
+# Shows: memory usage increase per line
+
+# FLAME GRAPHS: the best way to visualize profiling data
+# pip install py-spy
+# $ py-spy record -o profile.svg -- python myscript.py
+# Opens an SVG: x-axis = time, y-axis = call stack
+# Widest bars = most time spent — instantly shows the bottleneck
+# Works on running processes without restarting: py-spy top --pid PID
+
+# READING A PROFILE: what to look for
+# cumtime: total time including callees (start here — find the fattest bar)
+# tottime: time in function excluding callees (actual work done here)
+# ncalls: number of calls (high ncalls in a slow function = fix the caller)
+# The bottleneck: high cumtime + high in the call stack = fix this
+\`\`\``
   },
   {
     id: "14-3",
     number: "14.3",
     title: "Flame Graphs: Reading and Acting on Profiles",
-    content: `Invented by Brendan Gregg, **Flame Graphs** are a visualization of profiled software, allowing the most frequent code-paths to be identified quickly and accurately.
+    content: `\`\`\`python
+import timeit, statistics, time
 
-## How to Read a Flame Graph
-- **Each Box**: Represents a function in the stack.
-- **Width**: The width of a box indicates the total time spent in 그 function and its children (ancestry). The wider the box, the more time spent.
-- **Y-Axis**: Represents stack depth (the call chain).
-- **X-Axis**: Does NOT represent time. The functions are sorted alphabetically to maximize "merging" of similar paths.
-- **Color**: Usually random or used to differentiate types of code (e.g., Java vs. Kernel).
+# TIMEIT: the correct way to benchmark Python code
 
-## Identifying the "Plateau"
-Look for wide boxes at the top of a stack. This is "Self Time"—time the function spent doing work itself rather than calling other functions. If you see a wide box at the bottom that narrows quickly, that function is just a "dispatcher" and isn't the bottleneck.
+# METHOD 1: timeit module
+setup = 'data = list(range(10000))'
+stmt_list = '[x for x in data if x % 2 == 0]'
+stmt_filter = 'list(filter(lambda x: x % 2 == 0, data))'
 
-## Acting on the Data
-1. **Find the Wide Peaks**: Start with the widest boxes.
-2. **Analyze the Ancestry**: Why is this function being called so much? Can you cache the result? Can you call it once for a batch of items?
-3. **Drill Down**: Most profilers allow you to click a box to "zoom in" and see exactly what's happening inside that stack.
+# timeit runs 1,000,000 iterations and returns total time
+time_list = timeit.timeit(stmt_list, setup=setup, number=100000)
+time_filter = timeit.timeit(stmt_filter, setup=setup, number=100000)
+print(f'List comprehension: {time_list:.3f}s')
+print(f'filter(): {time_filter:.3f}s')
 
-Flame graphs turn thousands of lines of raw profiling data into a map. Without a map, you're just wandering in the dark.`
+# BENCHMARKING RULES:
+
+# RULE 1: Run enough iterations for stable results
+# Single run: noise from OS scheduling, CPU frequency scaling
+# Minimum: 3 runs, report minimum (not average) — average includes outliers
+
+# RULE 2: Warm up before benchmarking
+# First run: cold cache, JIT compilation (for JVM/V8), OS scheduling
+# Warm up: run the code 3-5 times before starting the timer
+def benchmark(func, args, warmup=3, iterations=10):
+# Warmup
+for _ in range(warmup):
+func(*args)
+# Measure
+times = []
+for _ in range(iterations):
+t0 = time.perf_counter() # highest resolution timer
+func(*args)
+\`\`\`
+
+times.append(time.perf_counter() - t0)
+
+\`\`\`python
+return {
+\`\`\`
+
+'min': min(times),
+'median': statistics.median(times),
+'mean': statistics.mean(times),
+'stdev': statistics.stdev(times),
+'max': max(times),
+}
+
+
+\`\`\`python
+# RULE 3: Use time.perf_counter() not time.time()
+# perf_counter: highest resolution clock, includes sleep time
+# time.time(): lower resolution, may jump due to NTP adjustments
+# process_time(): CPU time only, excludes sleep/IO waits
+
+# RULE 4: Benchmark at realistic scale
+# Benchmarking on 10 items is useless if production has 1,000,000
+# Algorithmic complexity only shows at scale: O(n^2) looks fine at n=10
+
+# RULE 5: Profile before optimizing
+# Benchmark AFTER profiling shows where the bottleneck is
+# Benchmark BEFORE and AFTER to verify the optimization helped
+
+# MICROBENCHMARKING PITFALLS:
+# Dead code elimination: compiler may skip code with no observable effect
+# Loop overhead: loop itself takes time — subtract it
+# Cache effects: first iteration cold, rest warm — unfair comparison
+# GC pauses: run gc.collect() before benchmarking in Python/Java/Go
+\`\`\``
   },
   {
     id: "14-4",
     number: "14.4",
     title: "Benchmarking: Methodology and Pitfalls",
-    content: `A **Benchmark** is a controlled test used to measure the performance of a specific piece of code. Writing a good benchmark is surprisingly difficult.
+    content: `\`\`\`python
+# DATABASE PERFORMANCE: the most common production bottleneck
 
-## The Pitfalls of "Microbenchmarking"
-Microbenchmarks measure very small snippets of code (like a single loop). They are often misleading because:
-- **Dead Code Elimination**: A clever compiler might see that your benchmark doesn't use the result of a calculation and delete the entire code being tested, resulting in "0.00ns" execution time.
-- **Inlining**: The compiler might inline the function into the benchmark loop, which wouldn't happen in real code.
-- **Cache Effects**: A microbenchmark might fit entirely in the L1 cache, while real-world usage involves L3 or main memory.
+# EXPLAIN ANALYZE: understand what the database actually does
+# PostgreSQL:
+# EXPLAIN ANALYZE SELECT * FROM orders WHERE customer_id = 42 AND status = 'pending';
 
-## Methodology for Accurate Benchmarking
-1. **Warmup**: Run the code several thousand times before measuring to allow the JIT to optimize.
-2. **Statistical Significance**: Run the benchmark many times and report the **Median** and **99th Percentile (p99)**, not just the Mean. The Mean is easily skewed by background system noise.
-3. **Prevent Optimization**: Ensure the result of the code under test is used (e.g., return it or pass it to a "Black Hole" function).
-4. **Environment Control**: Disable "Turbo Boost" on the CPU and close other applications to ensure consistent clock speeds.
+# Sample output and what it means:
+# Seq Scan on orders (cost=0.00..45231.00 rows=1 width=120) (actual time=0.123..892.345 rows=47 loops=1)
+# Filter: ((customer_id = 42) AND ((status)::text = 'pending'::text))
+# Rows Removed by Filter: 999953
+# Planning Time: 0.234 ms
+# Execution Time: 892.456 ms
 
-## Tools
-- **Java**: JMH (Java Microbenchmark Harness) - the industry standard.
-- **Go**: Built-in \`testing\` package with \`Benchmark\` functions.
-- **Rust**: Criterion.rs.
-- **JS**: Benchmark.js or the built-in test runners in Node/Deno.`
+# DIAGNOSIS: Seq Scan = reading ALL 1,000,000 rows to find 47
+# Rows Removed by Filter: 999953 = MAJOR RED FLAG
+
+# FIX: create index
+# CREATE INDEX idx_orders_customer_status ON orders(customer_id, status);
+
+# AFTER INDEX:
+# Index Scan using idx_orders_customer_status on orders
+# (cost=0.42..12.85 rows=47 width=120) (actual time=0.031..0.089 rows=47 loops=1)
+# Execution Time: 0.156 ms
+# SPEEDUP: 892ms -> 0.156ms = 5,717x faster
+
+# THE N+1 QUERY PROBLEM: the most common ORM performance mistake
+
+# WRONG: N+1 queries
+# This code makes 1 query for orders + N queries for customers (one per order)
+orders = Order.objects.filter(status='pending') # 1 query: SELECT * FROM orders
+for order in orders:
+print(order.customer.name) # N queries: SELECT * FROM customers WHERE id = ?
+# For 1000 pending orders: 1001 queries!
+
+# CORRECT: eager loading (1 query with JOIN)
+orders = Order.objects.filter(status='pending').select_related('customer')
+# Django: .select_related() for ForeignKey, .prefetch_related() for ManyToMany
+# SQLAlchemy: .options(joinedload(Order.customer))
+# Result: 1 query instead of 1001
+
+# DETECTING N+1 IN DJANGO:
+# pip install django-debug-toolbar
+# Shows: number of queries per request, duplicate queries, slow queries
+
+# QUERY OPTIMIZATION RULES:
+# 1. Index columns used in WHERE, JOIN ON, and ORDER BY
+# 2. Index composite queries in the right order (highest cardinality first)
+# 3. Use LIMIT when you do not need all results
+# 4. Select only needed columns: SELECT id, name NOT SELECT *
+# 5. Avoid functions on indexed columns in WHERE: WHERE LOWER(email) = ?
+# This prevents index use. Use: WHERE email = LOWER(?) instead
+# 6. Use covering indexes for read-heavy queries (include projected columns)
+# 7. Use EXPLAIN ANALYZE on every slow query — never guess
+
+# QUERY LOGGING: find slow queries automatically
+# PostgreSQL: log_min_duration_statement = 100 (log queries > 100ms)
+# MySQL: slow_query_log = ON, long_query_time = 0.1
+# Python SQLAlchemy: echo=True for development
+# Django: DEBUG=True logs all queries to django.db.backends
+\`\`\``
   },
   {
     id: "14-5",
     number: "14.5",
     title: "JIT Warm-Up Effects: Why Benchmarks Lie",
-    content: `Modern languages like Java, C#, and JavaScript (V8) use **Just-In-Time (JIT) Compilation**. When your program starts, it is interpreted (slow). As functions are called repeatedly, the JIT identifies "hot" spots and compiles them into optimized machine code.
+    content: `\`\`\`python
+import timeit, functools
+from typing import Iterator
 
-## The Tiered Compilation Process
-1. **Interpreter**: Starts immediately, no overhead, slow execution.
-2. **Tier 1 (Baseline)**: Quick compilation, minor optimizations.
-3. **Tier 2 (Optimizing)**: Deep optimization (inlining, loop unrolling), but takes time to compile.
+# 1. LIST COMPREHENSION vs LOOP vs MAP
+# In Python, list comprehensions are implemented in C — faster than explicit loops
 
-## Why This Matters for Performance
-If you measure your application immediately after startup, you are measuring the "Cold" performance. In production, your app might run for weeks, meaning you care about the "Warm" performance.
+data = list(range(1_000_000))
 
-## The De-optimization Trap
-The JIT makes assumptions (e.g., "this variable is always an integer"). If those assumptions are violated later (e.g., you pass a string), the JIT must **de-optimize**, throw away the machine code, and revert to the interpreter. This causes a massive, temporary latency spike.
+# Loop (slowest in Python):
+def loop_version():
+result = []
+for x in data:
+if x % 2 == 0:
+\`\`\`
 
----
-**Practical Advice**: When deploying a new version of a high-traffic service, use "Warmup Rounds"—send a small amount of dummy traffic to the service to trigger the JIT before you direct real user traffic to it. This prevents the "p99 spike" often seen after a deployment.`
+result.append(x * 2)
+
+\`\`\`python
+return result
+
+# List comprehension (fastest for creating lists):
+def comprehension_version():
+return [x * 2 for x in data if x % 2 == 0]
+
+# Generator (best when you do not need all results at once):
+def generator_version() -> Iterator[int]:
+return (x * 2 for x in data if x % 2 == 0)
+# Generators: O(1) memory, process one at a time — no list created
+
+# 2. STRING CONCATENATION
+# BAD: string += in loop creates new string object every iteration
+def bad_join(strings):
+result = ''
+for s in strings: result += s # O(n^2) total — each += copies all so far
+return result
+
+# GOOD: join() builds all at once
+def good_join(strings):
+return ''.join(strings) # O(n) — one pass
+
+# 3. CACHING EXPENSIVE COMPUTATIONS
+@functools.lru_cache(maxsize=128)
+def fibonacci(n: int) -> int:
+if n <= 1: return n
+return fibonacci(n-1) + fibonacci(n-2)
+# First call: O(n). Subsequent calls: O(1) lookup.
+# Without cache: O(2^n) exponential. With cache: O(n) total.
+
+# 4. AVOID REPEATED ATTRIBUTE LOOKUP IN HOT LOOPS
+# BAD: Python looks up list.append on every iteration
+def bad_loop(data):
+result = []
+for x in data:
+\`\`\`
+
+result.append(x) # attribute lookup every time
+
+
+\`\`\`python
+# GOOD: cache the method reference
+def good_loop(data):
+result = []
+append = result.append # single attribute lookup
+for x in data:
+append(x) # direct call, no lookup
+
+# 5. USE SETS FOR MEMBERSHIP TESTING
+# BAD: O(n) per lookup
+allowed_users_list = ['alice', 'bob', 'charlie'] # list
+if username in allowed_users_list: # O(n) linear scan
+grant_access()
+
+# GOOD: O(1) per lookup
+allowed_users_set = {'alice', 'bob', 'charlie'} # set (hash table)
+if username in allowed_users_set: # O(1) hash lookup
+grant_access()
+
+# 6. NUMPY FOR NUMERICAL WORK
+import numpy as np
+data_py = list(range(1_000_000))
+data_np = np.arange(1_000_000)
+
+# Pure Python sum: ~60ms
+# sum(data_py)
+
+# NumPy sum: ~1ms (60x faster — SIMD vectorization in C)
+# data_np.sum()
+
+# 7. PROFILING-GUIDED OPTIMIZATION EXAMPLE
+# Profile showed: 80% of time in format_user_name()
+# format_user_name called 10 million times
+# Fix: cache results with lru_cache
+@functools.lru_cache(maxsize=10000)
+def format_user_name(first: str, last: str) -> str:
+return f'{first.strip().title()} {last.strip().title()}'
+# After: format_user_name takes 0% of profile time (cache hit rate 99.8%)
+\`\`\``
   },
   {
     id: "14-6",
     number: "14.6",
     title: "CPU Performance: Instruction Throughput and Latency",
-    content: `To optimize code at the highest level, you must understand how a modern CPU actually executes instructions. It is not a simple "one instruction per clock cycle" process.
+    content: `\`\`\`python
+import asyncio, aiohttp, time
 
-## Pipelining
-CPUs use a **Pipeline** to execute instructions in stages (Fetch, Decode, Execute, Writeback). This allows the CPU to work on multiple instructions simultaneously.
-- **Throughput**: How many instructions are completed per second.
-- **Latency**: How long a single instruction takes from start to finish.
+# ASYNC I/O: handle thousands of concurrent I/O operations in one thread
+# Correct for: web scraping, API calls, database queries, file I/O
+# NOT correct for: CPU-bound computation (use multiprocessing instead)
 
-## Out-of-Order Execution (OoO)
-Modern CPUs don't execute instructions in the order they appear in your code. They look ahead, find instructions whose dependencies are met, and execute them as resources become available. They effectively perform a real-time topological sort of your code's dependency graph.
-
-## Superscalar Execution
-High-end CPUs have multiple execution units (ALUs). They can often retire 4 to 8 instructions per clock cycle if the instructions are independent.
-
-## The Bottleneck: Data Hazards
-The biggest enemy of CPU performance is the **Data Dependency**. If instruction B needs the result of instruction A, B must wait.
-\`\`\`c
-a = b + c; // Instruction 1
-d = a + e; // Instruction 2 (Depends on 1)
+# SEQUENTIAL (slow): 10 HTTP requests one at a time
+async def fetch_sequential(urls):
+async with aiohttp.ClientSession() as session:
+results = []
+for url in urls:
+async with session.get(url) as response:
 \`\`\`
-To optimize, try to "unroll" loops or restructure math so the CPU can find independent work to do while waiting for long-latency operations (like memory fetches).`
+
+results.append(await response.text())
+
+\`\`\`python
+return results
+# Time: sum of all individual response times (e.g. 10 × 200ms = 2000ms)
+
+# CONCURRENT (fast): 10 HTTP requests all at once
+async def fetch_concurrent(urls):
+async with aiohttp.ClientSession() as session:
+tasks = [
+\`\`\`
+
+asyncio.create_task(fetch_one(session, url))
+
+\`\`\`python
+for url in urls
+\`\`\`
+
+]
+
+\`\`\`python
+return await asyncio.gather(*tasks)
+
+async def fetch_one(session, url):
+async with session.get(url) as response:
+return await response.text()
+
+# Time: max of all individual response times (~200ms instead of 2000ms)
+# 10x speedup from concurrency alone — zero threads added
+
+# CONTROLLING CONCURRENCY: avoid overwhelming target server
+async def fetch_with_limit(urls, max_concurrent=10):
+semaphore = asyncio.Semaphore(max_concurrent) # max 10 at once
+
+async def fetch_with_sem(session, url):
+async with semaphore: # blocks if 10 already running
+async with session.get(url) as response:
+return await response.text()
+
+async with aiohttp.ClientSession() as session:
+tasks = [fetch_with_sem(session, url) for url in urls]
+return await asyncio.gather(*tasks)
+
+# ASYNC DATABASE QUERIES (asyncpg for PostgreSQL):
+import asyncpg
+
+async def fetch_user_orders(user_ids: list) -> dict:
+conn = await asyncpg.connect('postgresql://user:pass@localhost/db')
+try:
+# Fetch all users concurrently with a single query
+rows = await conn.fetch(
+\`\`\`
+
+'SELECT user_id, COUNT(*) as order_count FROM orders WHERE user_id = ANY($1) GROUP BY user_id',
+user_ids
+)
+
+\`\`\`python
+return {row['user_id']: row['order_count'] for row in rows}
+\`\`\`
+
+finally:
+
+\`\`\`python
+await conn.close()
+
+# WHEN TO USE ASYNC vs THREADS vs MULTIPROCESSING:
+# Async: I/O-bound, high concurrency (1000s of connections)
+# Threading: I/O-bound, simpler code, moderate concurrency (<100)
+# Multiprocessing: CPU-bound, embarrassingly parallel computation
+# Rule: if you spend time WAITING for I/O -> async or threads
+# if you spend time COMPUTING -> multiprocessing
+\`\`\``
   },
   {
     id: "14-7",
     number: "14.7",
     title: "Vectorization: SIMD and Auto-Vectorization",
-    content: `**SIMD** (Single Instruction, Multiple Data) allows a CPU to perform the same operation on multiple data points at once using wide registers (128-bit, 256-bit, or 512-bit).
+    content: `\`\`\`python
+import functools, time, hashlib, json
+from typing import Any, Callable
 
-## The Math of SIMD
-Imagine you need to add two arrays of 8 integers.
-- **Scalar**: 8 separate ADD instructions.
-- **SIMD (AVX2)**: One VADDPS instruction that adds all 8 pairs in a single clock cycle. This is an 8x theoretical speedup.
+# CACHING: serve results from fast storage instead of recomputing
 
-## Auto-Vectorization
-Modern compilers (GCC, Clang, Rustc) are very good at **Auto-Vectorization**. If you write a simple loop, the compiler will try to transform it into SIMD instructions.
-\`\`\`c
-// The compiler can easily vectorize this
-for (int i = 0; i < 1024; i++) {
-    c[i] = a[i] + b[i];
-}
+# LEVEL 1: In-process cache (lru_cache)
+@functools.lru_cache(maxsize=1000)
+def get_country_from_ip(ip_address: str) -> str:
+return geoip_service.lookup(ip_address) # slow: 50ms per call
+# First call: 50ms (hits geoip_service)
+# Subsequent calls with same IP: <1ms (from cache)
+# maxsize=1000: keeps last 1000 unique IPs in memory
+
+# LIMITATION: lru_cache is process-local and not thread-safe for complex objects
+# For thread-safe caching: use threading.Lock or a proper cache library
+
+# LEVEL 2: Distributed cache (Redis) — shared across all processes and servers
+import redis
+
+cache = redis.Redis(host='localhost', port=6379, db=0)
+
+def cached(ttl_seconds: int = 300):
 \`\`\`
 
-## What Blocks Vectorization?
-1. **Branching**: \`if\` statements inside loops make vectorization difficult or impossible.
-2. **Data Dependencies**: If \`a[i]\` depends on \`a[i-1]\`.
-3. **Memory Alignment**: SIMD instructions often require data to be aligned to 16 or 32-byte boundaries in memory.
+'''Decorator: cache function results in Redis with TTL.'''
 
-## Intrinsics and Libraries
-If the compiler fails, you can use **Intrinsics** (functions that map directly to SIMD instructions) or highly optimized libraries like **Intel MKL**, **OpenBLAS**, or **Eigen**. For Data Science and AI, libraries like NumPy and PyTorch are essentially wrappers around these SIMD-optimized engines.`
+\`\`\`python
+def decorator(func: Callable) -> Callable:
+@functools.wraps(func)
+def wrapper(*args, **kwargs) -> Any:
+# Build cache key from function name and arguments
+key_data = json.dumps({'func': func.__name__, 'args': args, 'kwargs': kwargs}, sort_keys=True)
+cache_key = 'cache:' + hashlib.sha256(key_data.encode()).hexdigest()[:16]
+
+# Try cache first
+cached_value = cache.get(cache_key)
+if cached_value is not None:
+return json.loads(cached_value) # cache hit: return immediately
+
+# Cache miss: compute and store
+result = func(*args, **kwargs)
+\`\`\`
+
+cache.setex(cache_key, ttl_seconds, json.dumps(result))
+
+\`\`\`python
+return result
+return wrapper
+return decorator
+
+@cached(ttl_seconds=3600) # cache for 1 hour
+def get_product_recommendations(user_id: int) -> list:
+return ml_model.predict(user_id) # slow: 500ms ML inference
+
+# CACHE INVALIDATION STRATEGIES:
+# TTL-based: cache expires after N seconds (simple, stale data possible)
+# Event-based: invalidate when data changes (fresh, complex to implement)
+# Write-through: update cache on every write (always fresh, slower writes)
+
+# CACHE STAMPEDE (thundering herd):
+# When cache expires, all requests simultaneously miss and hit the database
+# Fix: probabilistic early expiration (refresh before expiry) OR
+# cache lock (only one request recomputes, others wait)
+
+def cached_with_lock(cache_key: str, compute_fn: Callable, ttl: int) -> Any:
+\`\`\`
+
+'''Prevent cache stampede with a distributed lock.'''
+
+\`\`\`python
+value = cache.get(cache_key)
+if value: return json.loads(value)
+
+lock_key = f'lock:{cache_key}'
+lock_acquired = cache.set(lock_key, '1', ex=10, nx=True) # NX = set if not exists
+if lock_acquired:
+try:
+result = compute_fn() # only one process computes
+\`\`\`
+
+cache.setex(cache_key, ttl, json.dumps(result))
+
+\`\`\`python
+return result
+\`\`\`
+
+finally:
+cache.delete(lock_key)
+
+\`\`\`python
+else:
+# Another process is computing — wait and retry
+\`\`\`
+
+time.sleep(0.1)
+
+\`\`\`python
+return cached_with_lock(cache_key, compute_fn, ttl)
+\`\`\``
   },
   {
     id: "14-8",
     number: "14.8",
     title: "Memory Performance: Locality, Prefetching, Alignment",
-    content: `In modern computing, the **Memory Wall** is the primary bottleneck. CPUs are thousands of times faster than Main Memory (RAM). A CPU can execute an instruction in 0.5ns, but waiting for RAM takes 100ns.
-
-## The Cache Hierarchy
-To hide this latency, CPUs use layers of cache:
-- **L1 Cache**: ~1ns (tiny, very fast)
-- **L2 Cache**: ~4ns
-- **L3 Cache**: ~10-20ns (shared across cores)
-- **RAM**: ~100ns
-
-## Spatial Locality
-When the CPU fetches one byte from RAM, it actually fetches a 64-byte **Cache Line**. If your code then accesses the next byte (as in an array), it's already in the L1 cache. This is why **Arrays** are much faster than **Linked Lists**. In a linked list, each node is in a random location in memory, causing a "Cache Miss" for every single step.
-
-## Temporal Locality
-If you access the same memory location repeatedly, it stays in the cache.
-
-## Memory Alignment
-Modern CPUs prefer data to be at addresses that are multiples of their size (e.g., a 4-byte integer at an address divisible by 4). Misaligned access can require two memory fetches instead of one, doubling the latency.
-
----
-**Data-Oriented Design**: The key to performance is organizing your data so it flows through the cache efficiently. Prefer "Structures of Arrays" (SoA) over "Arrays of Structures" (AoS) when you only need to process a subset of fields across many objects.`
+    content: `PROFILING SESSION: Take any Python program that takes more than 1 second to run. Profile it with cProfile. Identify the top 3 bottlenecks by cumulative time. Generate a flame graph with py-spy. Fix the single biggest bottleneck. Measure before and after. Report the speedup.
+N+1 QUERY DETECTION: In a Django or SQLAlchemy project, use django-debug-toolbar or SQLAlchemy event logging to count queries per endpoint. Find an endpoint with an N+1 problem. Fix it with select_related/prefetch_related or joinedload. Measure before and after query count and response time.
+ASYNC CONVERSION: Take a sequential function that makes 10 HTTP API calls. Convert it to async using asyncio and aiohttp. Measure the speedup with asyncio.gather vs sequential. Add a semaphore to limit concurrency to 3 at a time.
+BENCHMARK SUITE: Write a benchmark comparing: (a) list vs tuple for iteration, (b) dict vs list for membership testing at sizes 10, 100, 1000, 10000, (c) string concatenation with += vs join for 10, 100, 1000 strings. Plot the results. Explain each result in terms of Python internals.
+DATABASE INDEX EXERCISE: Create a PostgreSQL table with 1 million rows. Run EXPLAIN ANALYZE on a query without index. Create the right index. Run EXPLAIN ANALYZE again. Report: execution plan change, execution time before and after, rows removed by filter.
+Chapter 14 — Ten Performance Engineering Truths
+Measure before you optimize. The bottleneck is almost never where you think it is. Profiling reveals reality. Guessing wastes time.
+Amdahl's Law: optimizing a 10% bottleneck to zero gives 11% speedup. Find the real bottleneck (80%+ of time) and fix that.
+Flame graphs are the best tool for understanding performance. The widest bars are the bottlenecks. Everything else is noise.
+EXPLAIN ANALYZE every slow database query. Seq Scan on large tables is always suspicious. The fix is almost always an index.
+N+1 queries are the most common ORM performance mistake. Use select_related, prefetch_related, or JOIN to fix them.
+Index columns used in WHERE, JOIN ON, and ORDER BY. Composite index order matters: put highest cardinality equality columns first.
+Async I/O handles thousands of concurrent I/O operations in one thread. Use asyncio.gather for concurrent requests, not sequential await.
+String concatenation with += in a loop is O(n^2). Always use ''.join(strings). This is not a micro-optimization — it is an algorithmic fix.
+Use sets for membership testing, not lists. Set lookup is O(1). List lookup is O(n). For 1000 items: 1000x faster.
+Cache expensive computations at the right level: in-process (lru_cache), distributed (Redis), or HTTP (CDN). Always set a TTL to prevent stale data.`
   },
   {
     id: "14-9",
