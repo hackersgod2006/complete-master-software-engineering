@@ -5,140 +5,420 @@ export const CH17_SECTIONS: Section[] = [
     id: "17-1",
     number: "17.1",
     title: "What Architecture Decisions Really Are",
-    content: `Many developers view **Software Architecture** as the "grand blueprint" of a system—a set of diagrams drawn by a high-level architect that developers then follow. This is a myth. In reality, architecture is the set of significant decisions that are costly to change later.
+    content: `Software architecture is the set of decisions about the overall structure of a system — how it is divided into components, how those components communicate, where important capabilities live, and which decisions are hard to change later. Good architecture makes common changes easy and makes important capabilities obvious. Bad architecture makes every change a negotiation with the entire system.
+Architecture is not about diagrams on whiteboards. It is about making the right trade-offs for the actual constraints of your system: team size, scalability requirements, deployment environment, operational capabilities, and the specific types of change most likely to occur.
 
-Grady Booch, a pioneer of software modeling, defined architecture as "the set of design decisions that, if made incorrectly, may cause your project to be cancelled."
 
-## The "Hard to Change" Metric
-A good rule of thumb for identifying an architectural decision is to ask: "If we change our mind on this in six months, how much will it cost?"
-- **Design Decision:** "Should we use a \`for\` loop or a \`map\`?" (Cost: Low)
-- **Architectural Decision:** "Should we use a relational database or a document store?" (Cost: High)
-- **Architectural Decision:** "Should we build this as a single monolith or 20 microservices?" (Cost: Extreme)
-
-## Architecture as Trade-offs
-Mark Richards, author of *Fundamentals of Software Architecture*, famously stated: **"Everything in software architecture is a trade-off."** If an architect tells you a solution has no downsides, they are either lying or they don't understand the solution.
-
-If you choose Microservices, you trade simplicity for scalability. If you choose a Monolith, you trade deployment speed for operational simplicity. The role of the architect is not to find the "best" solution, but to find the "least bad" set of trade-offs for the specific business context.
-
-## The Architect's Scope
-The architect must look beyond the code. They must consider:
-- **Business Goals:** Time-to-market, budget, regulatory requirements.
-- **Operational Requirements:** Availability, performance, security.
-- **Developer Experience:** Build times, testing ease, team structure.
-
-Architecture is the bridge between the technical implementation and the business vision.`
+---`
   },
   {
     id: "17-2",
     number: "17.2",
     title: "The Four Dimensions of Architecture",
-    content: `To understand a system's architecture, we must look at it through four distinct lenses or dimensions. Each dimension captures a different aspect of the system's complexity.
+    content: `Layered architecture divides the system into horizontal layers, each with a specific responsibility. The most common division for web applications: Presentation (HTTP, API), Application (use cases, workflows), Domain (business logic, entities), and Infrastructure (database, external services). The rule: dependencies flow downward only — each layer depends on the layer below, never above.
 
-## 1. Structure
-This is the most common view of architecture. It refers to the type of architecture style used (e.g., Microservices, Layered, Microkernel). It defines the boundaries of the system and how the major components are organized.
+\`\`\`python
+# LAYERED ARCHITECTURE: four-layer web application
 
-## 2. Architecture Characteristics (The "-ilities")
-These are the non-functional requirements of the system. They describe *how* the system performs its functions. Common characteristics include:
-- **Scalability:** Can it handle more users?
-- **Availability:** Is it up when needed?
-- **Reliability:** Does it work correctly?
-- **Maintainability:** Is it easy to change?
+# LAYER 4: PRESENTATION (HTTP interface)
+# Handles HTTP: parse request, call application layer, format response
+from flask import Flask, request, jsonify
+app = Flask(__name__)
 
-## 3. Architecture Decisions
-These are the "rules" of the system. They define what is allowed and what is not. For example: "The presentation layer may only talk to the business layer; it may never talk directly to the database." These decisions provide the constraints that keep the structure intact.
+@app.route('/api/orders', methods=['POST'])
+def create_order_endpoint():
+data = request.get_json()
+try:
+# Presentation calls Application layer
+order = order_service.create_order(
+customer_id=data['customer_id'],
+items=data['items']
+\`\`\`
 
-## 4. Design Principles
-These are the guidelines used to make decisions. They are more specific than characteristics but more general than decisions. Examples include the SOLID principles or "Prefer composition over inheritance."
+)
 
-| Dimension | Focus | Example |
-| :--- | :--- | :--- |
-| **Structure** | Organization | Modular Monolith |
-| **Characteristics** | Performance | Sub-100ms latency |
-| **Decisions** | Rules | No direct DB access from UI |
-| **Principles** | Guidelines | Don't Repeat Yourself (DRY) |
+\`\`\`python
+return jsonify({'order_id': order.id, 'status': order.status}), 201
+except ValidationError as e:
+return jsonify({'error': str(e)}), 400
 
-A master architect balances these four dimensions to ensure the system meets its goals both today and in the future.`
+# LAYER 3: APPLICATION (use cases / orchestration)
+# Coordinates workflow, no business rules, no HTTP concerns
+class OrderApplicationService:
+def __init__(self, order_repo, payment_service, inventory_service, events):
+\`\`\`
+
+self.orders = order_repo
+self.payments = payment_service
+self.inventory = inventory_service
+self.events = events
+
+
+\`\`\`python
+def create_order(self, customer_id: int, items: list) -> 'Order':
+# Orchestrates domain objects and infrastructure
+customer = self.customers.find_by_id(customer_id)
+order = Order.create(customer=customer, items=items) # domain logic
+\`\`\`
+
+self.inventory.reserve(order.items) # infrastructure
+
+\`\`\`python
+saved_order = self.orders.save(order) # infrastructure
+\`\`\`
+
+self.events.publish('order.created', saved_order) # infrastructure
+
+\`\`\`python
+return saved_order
+
+# LAYER 2: DOMAIN (business logic, entities, rules)
+# Pure business logic — no database, no HTTP, no external services
+from dataclasses import dataclass, field
+from typing import List
+
+@dataclass
+class Order:
+\`\`\`
+
+id: int
+customer_id: int
+items: List['OrderItem']
+status: str = 'pending'
+
+
+\`\`\`python
+@classmethod
+def create(cls, customer, items) -> 'Order':
+if not items: raise ValidationError('Order must have at least one item')
+if not customer.is_active: raise ValidationError('Customer account is inactive')
+return cls(id=None, customer_id=customer.id, items=items)
+
+def calculate_total(self) -> int:
+return sum(item.price_cents * item.quantity for item in self.items)
+
+def cancel(self) -> None:
+if self.status == 'shipped':
+raise BusinessRuleError('Cannot cancel shipped order')
+\`\`\`
+
+self.status = 'cancelled'
+
+
+\`\`\`python
+# LAYER 1: INFRASTRUCTURE (database, external APIs, messaging)
+# Implements interfaces defined by domain layer
+import psycopg2
+
+class PostgreSQLOrderRepository:
+def __init__(self, connection): self.conn = connection
+
+def save(self, order: Order) -> Order:
+cursor = self.conn.cursor()
+\`\`\`
+
+cursor.execute(
+'INSERT INTO orders (customer_id, status) VALUES (%s, %s) RETURNING id',
+(order.customer_id, order.status)
+)
+order.id = cursor.fetchone()[0]
+self.conn.commit()
+
+\`\`\`python
+return order
+
+def find_by_id(self, order_id: int) -> Order:
+cursor = self.conn.cursor()
+\`\`\`
+
+cursor.execute('SELECT * FROM orders WHERE id = %s', (order_id,))
+
+\`\`\`python
+row = cursor.fetchone()
+if not row: raise NotFoundError('Order', order_id)
+return Order(id=row[0], customer_id=row[1], items=[], status=row[2])
+\`\`\``
   },
   {
     id: "17-3",
     number: "17.3",
     title: "Architecture Characteristics: The -ilities",
-    content: `Architecture characteristics are the "non-functional" requirements of a system. They are called "-ilities" because most of them end with that suffix. These characteristics define the "quality" of the architecture.
+    content: `Hexagonal architecture (also called Ports and Adapters) makes the application core completely independent of the outside world. The application defines ports (interfaces) for everything it needs. Adapters implement those ports for specific technologies. This allows the same application core to run with different databases, different UIs, and different messaging systems — with zero changes to the core.
 
-## The Hierarchy of Characteristics
-Not all -ilities are created equal. A startup focusing on rapid growth might prioritize **Scalability** and **Agility**, while a bank might prioritize **Security** and **Reliability**.
+\`\`\`python
+# HEXAGONAL ARCHITECTURE: ports and adapters
 
-## Operational Characteristics
-- **Availability:** The percentage of time the system is operational (e.g., "four nines" or 99.99%).
-- **Performance:** Response times, throughput, and resource utilization.
-- **Scalability:** The ability to handle increased load without a decrease in performance.
-- **Elasticity:** The ability to scale up and down automatically based on demand.
+# THE APPLICATION CORE: depends on nothing external
+from abc import ABC, abstractmethod
+from typing import List, Optional
 
-## Structural Characteristics
-- **Maintainability:** How easy it is to fix bugs or make small changes.
-- **Testability:** How easy it is to verify the system's correctness.
-- **Deployability:** The ease and frequency with which the system can be deployed to production.
-- **Modularity:** The degree to which the system is composed of independent, interchangeable parts.
+# PORTS (interfaces the application defines — inbound and outbound)
 
-## Cross-Cutting Characteristics
-- **Security:** Protection against unauthorized access and data breaches.
-- **Recoverability:** How fast the system can recover from a disaster (RTO - Recovery Time Objective).
+# Inbound port: how the outside world drives the application
+class OrderManagementPort(ABC):
+@abstractmethod
+def place_order(self, customer_id: int, items: list) -> dict: pass
+@abstractmethod
+def cancel_order(self, order_id: int) -> None: pass
 
-**The Architect's Challenge:** Characteristics often conflict. Increasing **Security** often decreases **Performance**. Increasing **Scalability** through microservices often decreases **Testability**. Your job is to select the 3-5 "driving" characteristics that are most important for your specific project.`
+# Outbound ports: what the application needs from the outside world
+class OrderRepositoryPort(ABC):
+@abstractmethod
+def save(self, order) -> 'Order': pass
+@abstractmethod
+def find_by_id(self, order_id: int) -> Optional['Order']: pass
+
+class PaymentPort(ABC):
+@abstractmethod
+def charge(self, customer_id: int, amount_cents: int) -> str: pass
+
+class NotificationPort(ABC):
+@abstractmethod
+def send_confirmation(self, order) -> None: pass
+
+# APPLICATION CORE: implements inbound port, depends on outbound ports
+class OrderService(OrderManagementPort):
+def __init__(self,
+\`\`\`
+
+order_repo: OrderRepositoryPort,
+payment: PaymentPort,
+notification: NotificationPort):
+self.order_repo = order_repo
+self.payment = payment
+self.notification = notification
+
+
+\`\`\`python
+def place_order(self, customer_id: int, items: list) -> dict:
+total = sum(i['price'] * i['qty'] for i in items)
+charge_id = self.payment.charge(customer_id, total)
+order = self.order_repo.save({'customer_id': customer_id, 'items': items, 'charge_id': charge_id})
+\`\`\`
+
+self.notification.send_confirmation(order)
+
+\`\`\`python
+return {'order_id': order['id'], 'status': 'confirmed'}
+
+def cancel_order(self, order_id: int) -> None:
+order = self.order_repo.find_by_id(order_id)
+if not order: raise ValueError(f'Order {order_id} not found')
+\`\`\`
+
+self.order_repo.save({**order, 'status': 'cancelled'})
+
+
+\`\`\`python
+# ADAPTERS: implement the outbound ports for specific technologies
+
+class PostgreSQLOrderRepository(OrderRepositoryPort):
+def save(self, order) -> dict:
+# PostgreSQL implementation
+\`\`\`
+
+...
+
+
+\`\`\`python
+class StripePaymentAdapter(PaymentPort):
+def charge(self, customer_id, amount_cents) -> str:
+# Stripe implementation
+\`\`\`
+
+...
+
+
+\`\`\`python
+class SendGridNotificationAdapter(NotificationPort):
+def send_confirmation(self, order) -> None:
+# SendGrid implementation
+\`\`\`
+
+...
+
+
+\`\`\`python
+# For TESTING: use in-memory adapters — zero real external dependencies
+class InMemoryOrderRepository(OrderRepositoryPort):
+def __init__(self): self._store = {}; self._next_id = 1
+def save(self, order) -> dict:
+if 'id' not in order:
+order = {**order, 'id': self._next_id}; self._next_id += 1
+\`\`\`
+
+self._store[order['id']] = order; return order
+
+\`\`\`python
+def find_by_id(self, order_id): return self._store.get(order_id)
+
+class FakePaymentAdapter(PaymentPort):
+def charge(self, customer_id, amount_cents) -> str:
+return f'fake_charge_{customer_id}_{amount_cents}'
+
+class FakeNotificationAdapter(NotificationPort):
+def __init__(self): self.sent = []
+def send_confirmation(self, order): self.sent.append(order)
+
+# Tests run with zero network, zero database, zero email — instant
+\`\`\``
   },
   {
     id: "17-4",
     number: "17.4",
     title: "Measuring Architecture: Fitness Functions",
-    content: `In biological evolution, a **fitness function** is a measure of how well an organism is adapted to its environment. In evolutionary architecture, we use the same concept to objectively measure how well our architecture meets its goals.
+    content: `Microservices architecture structures a system as a collection of small, independently deployable services, each owning its own data and communicating over network APIs. Each service is focused on a single business capability, can be deployed independently, and can fail without bringing down the entire system.
+Characteristic
+Monolith
+Microservices
+Deployment
+Deploy entire application together
+Deploy each service independently
+Scaling
+Scale entire application
+Scale individual services based on need
+Technology
+One language and stack
+Each service can use best tool for job
+Data
+Shared database
+Each service owns its own database
+Team structure
+One team owns everything
+Small teams own individual services
+Failure isolation
+One bug can crash everything
+Services fail independently
+Complexity
+Simpler to develop initially
+Network, distributed state, versioning
+Best for
+Teams < 20 engineers, early stage
+Large teams, proven domain, scale needs
 
-## The Problem with Traditional Architecture
-Traditional architecture is "static." You design it once, and then it slowly degrades over time as developers take shortcuts or requirements change. This is known as **Architectural Decay**.
 
-## Fitness Functions as Guardrails
-A fitness function is a mechanism that provides an objective integrity assessment of some architectural characteristic. It can be an automated test, a metric, or even a manual process.
+\`\`\`python
+# MICROSERVICES COMMUNICATION PATTERNS
 
-### Examples of Fitness Functions:
-1. **Maintainability (Cyclomatic Complexity):** An automated build step that fails if any function has a complexity score > 15.
-2. **Security (Vulnerability Scanning):** A tool like Snyk or Dependabot that checks for known vulnerabilities in dependencies.
-3. **Structure (Layer Violation):** A tool like ArchUnit (Java) or NetArchTest (.NET) that ensures the UI layer doesn't call the Database layer directly.
-4. **Performance (Synthetic Latency):** A test that fails if the p99 latency of a critical API exceeds 200ms.
+# 1. SYNCHRONOUS (REST/gRPC): immediate response required
+# Use for: user-facing requests requiring real-time response
+import requests
 
-## Types of Fitness Functions
-- **Atomic vs. Holistic:** Measuring one thing (e.g., class size) vs. many things (e.g., the interaction between services).
-- **Triggered vs. Continual:** Running on every commit vs. running every hour in production.
-- **Static vs. Dynamic:** Analyzing code without running it vs. analyzing the running system.
+class OrderService:
+def __init__(self, inventory_service_url: str, payment_service_url: str):
+\`\`\`
 
-By defining fitness functions, you move architecture from "vague guidelines" to "executable requirements." You ensure that the system's quality is maintained automatically as the codebase grows.`
+self.inventory_url = inventory_service_url
+self.payment_url = payment_service_url
+
+
+\`\`\`python
+def place_order(self, order_data: dict) -> dict:
+# Synchronous calls to other services
+inv_response = requests.post(
+\`\`\`
+
+f'{self.inventory_url}/reserve',
+
+\`\`\`python
+json={'items': order_data['items']},
+timeout=5
+\`\`\`
+
+)
+
+\`\`\`python
+if inv_response.status_code != 200:
+raise InventoryUnavailable(inv_response.json()['error'])
+
+pay_response = requests.post(
+\`\`\`
+
+f'{self.payment_url}/charge',
+
+\`\`\`python
+json={'customer_id': order_data['customer_id'], 'amount': order_data['total']},
+timeout=10
+\`\`\`
+
+)
+
+\`\`\`python
+if pay_response.status_code != 200:
+# Compensating transaction: release inventory reservation
+\`\`\`
+
+requests.post(f'{self.inventory_url}/release', json={'items': order_data['items']})
+
+\`\`\`python
+raise PaymentFailed(pay_response.json()['error'])
+
+return {'order_id': create_order(order_data).id, 'status': 'confirmed'}
+
+# 2. ASYNCHRONOUS (message queues): fire and forget, eventual consistency
+# Use for: background processing, fan-out notifications, decoupling services
+import json
+
+class OrderService:
+def __init__(self, message_broker):
+\`\`\`
+
+self.broker = message_broker
+
+
+\`\`\`python
+def place_order(self, order_data: dict) -> dict:
+order = create_order(order_data) # create locally
+# Publish event — other services react asynchronously
+\`\`\`
+
+self.broker.publish('order.placed', {
+'order_id': order.id,
+'customer_id': order.customer_id,
+'items': order.items,
+'total_cents': order.total_cents
+})
+
+\`\`\`python
+return {'order_id': order.id, 'status': 'processing'}
+
+# InventoryService subscribes to order.placed
+# PaymentService subscribes to order.placed
+# NotificationService subscribes to order.placed
+# Each service processes at its own pace — fully decoupled
+
+# SAGA PATTERN: distributed transactions across services
+# Choreography: services react to events (as above)
+# Orchestration: a coordinator tells each service what to do
+# Each step has a compensating transaction for rollback
+\`\`\``
   },
   {
     id: "17-5",
     number: "17.5",
     title: "Architecture Decision Records (ADRs)",
-    content: `One of the most common failures in long-term software projects is the "Missing Context" problem. A new developer joins and asks, "Why on earth did they use a graph database here?" No one knows. The person who made the decision left three years ago.
+    content: `LAYERED ARCHITECTURE: Build a complete 4-layer web application (Presentation, Application, Domain, Infrastructure) for a simple blog. The domain layer must have zero imports from Flask, SQLAlchemy, or any external library. Write unit tests for domain layer with zero real dependencies.
+HEXAGONAL ARCHITECTURE: Take the blog application and restructure it with hexagonal architecture. Define ports for: post repository, email notifications, search indexing. Create in-memory adapters for all three. Write tests using only in-memory adapters — zero real database, zero real email, zero real search.
+MICROSERVICES DESIGN: Design a microservices architecture for an e-commerce platform. Identify service boundaries, data ownership, and communication patterns. Draw the service map showing: which services exist, what events they publish, what events they subscribe to, what synchronous calls they make.
+ARCHITECTURE DECISION RECORD: Write an ADR (Architecture Decision Record) for choosing between monolith and microservices for a new project. Include: context, options considered, decision, consequences. Use the format from adr.github.io.
+STRANGLER FIG IN ARCHITECTURE: Design a migration plan from a monolith to microservices for a specific service boundary. Specify the routing layer, the parallel run strategy, the data migration approach, and the success criteria for the migration.
+Chapter 17 — Ten Architecture Truths
+Architecture is the decisions that are hard to change. Make them explicitly and document them. Accidental architecture is expensive.
+Layered architecture: dependencies flow downward only. Domain layer knows nothing about databases, HTTP, or external services.
+The domain layer is the heart of the application. It must be pure business logic — no infrastructure concerns contaminating it.
+Hexagonal architecture makes the application core technology-agnostic. The same core works with PostgreSQL today and DynamoDB tomorrow.
+Ports define what the application needs. Adapters implement those needs for specific technologies. This is the key to testability at scale.
+Monolith is the right choice for most early-stage projects and small teams. Start monolith, extract services when you feel specific pain.
+Microservices are the right choice when: teams are large, services need independent deployment, or different services have radically different scaling needs.
+Every microservice owns its own database. Shared databases between microservices destroy independence and create coupling at the data layer.
+Synchronous communication (REST/gRPC) for user-facing real-time requests. Asynchronous messaging for background processing and fan-out.
+The Saga pattern manages distributed transactions. Each step has a compensating transaction. Design for failure from the beginning.
 
-**Architecture Decision Records (ADRs)** are short text files that capture the "Why" behind a significant decision.
+CHAPTER 18
+DOMAIN-DRIVEN DESIGN
+Ubiquitous Language, Bounded Contexts, Aggregates, and the Art of Modeling Complex Business Domains
 
-## The Structure of an ADR
-A standard ADR (following Michael Nygard's template) includes:
-1. **Title:** Short and descriptive.
-2. **Status:** Proposed, Accepted, Superceded, or Deprecated.
-3. **Context:** What was the problem? What were the constraints? (e.g., "We need to handle 10k writes/sec").
-4. **Decision:** What did we decide to do? (e.g., "We will use Apache Cassandra").
-5. **Consequences:** What are the trade-offs? (e.g., "We lose ACID transactions but gain linear scalability").
-
-## Why ADRs are Essential
-- **Historical Context:** They provide a "paper trail" for future maintainers.
-- **Alignment:** Writing the ADR forces the team to agree on the specifics of the decision.
-- **Education:** They serve as a learning resource for new team members.
-- **Refinement:** If a decision turns out to be wrong, the ADR helps you understand what assumptions were incorrect.
-
-## Best Practices
-- **Store in Git:** Keep ADRs in the same repository as the code.
-- **Keep them Short:** 1-2 pages maximum.
-- **Decide on Significance:** Don't write an ADR for every function. Only for things that are "Hard to Change."
-
-**Key Insight:** The most important part of an ADR is the **Consequences** section. Documenting the downsides proves you understood the trade-off and didn't just pick a "shiny" technology.`
+"The heart of software is its ability to solve domain-related problems for its users. All other features, vital as they may be, support this basic purpose." — Eric Evans, Domain-Driven Design`
   },
   {
     id: "17-6",
