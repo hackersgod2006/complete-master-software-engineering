@@ -5,154 +5,593 @@ export const CH06_SECTIONS: Section[] = [
     id: "6-1",
     number: "6.1",
     title: "Algorithm Analysis: Big-O, Big-Omega, Big-Theta",
-    content: `Algorithm analysis is the mathematical foundation of software engineering. It allows us to predict performance and scalability without relying on specific hardware benchmarks.
+    content: `\`\`\`python
+# BIG-O: f(n) = O(g(n)) if exists c>0, n0 such that f(n) <= c*g(n) for n >= n0
+# Example: 3n^2 + 5n + 100 = O(n^2)
+# Proof: 3n^2+5n+100 <= 108n^2 for n>=1 (c=108 absorbs lower terms)
 
-## The Big Three Notations
-1. **Big-O ($O$)**: The **Upper Bound**. It represents the "worst-case" scenario. If an algorithm is $O(n^2)$, it will never be slower than $n^2$ for large $n$.
-2. **Big-Omega ($\Omega$)**: The **Lower Bound**. It represents the "best-case" scenario.
-3. **Big-Theta ($\Theta$)**: The **Tight Bound**. An algorithm is $\Theta(f(n))$ if it is both $O(f(n))$ and $\Omega(f(n))$. This is the most precise description of an algorithm's behavior.
+# GROWTH RATES (ascending):
+# O(1) < O(log n) < O(sqrt n) < O(n) < O(n log n) < O(n^2) < O(2^n) < O(n!)
 
-## Why $n \to \infty$?
-We care about **Asymptotic Analysis**. For small $n$, a constant factor might make an $O(n^2)$ algorithm faster than an $O(n \log n)$ one. But as $n$ grows, the higher-order term dominates. This is why we ignore constants ($2n \to n$) and lower-order terms ($n^2 + n \to n^2$).
+# CONCRETE NUMBERS at n = 1,000,000:
+# O(log n): 20 operations
+# O(n): 1,000,000 operations
+# O(n log n): 20,000,000 operations
+# O(n^2): 10^12 operations = 17 MINUTES at 10^9 ops/sec
+# O(2^n): immense — universe lifetime insufficient
 
-## Common Complexities in the Wild
-- **$O(1)$**: Accessing an array index or a hash map (average).
-- **$O(\log n)$**: Binary search. Scale-invariant; doubling $n$ only adds one more step.
-- **$O(n)$**: Linear scan.
-- **$O(n \log n)$**: Efficient sorting (Merge Sort, Quicksort).
-- **$O(n^2)$**: Simple loops (Insertion Sort).
-- **$O(2^n)$**: Recursive Fibonacci, exhaustive search.
-- **$O(n!)$**: Traveling Salesperson (brute force).
+# This is not a constant factor difference.
+# O(n^2) vs O(n log n) on 1M items: usable software vs completely unusable.
 
-| Complexity | 10 Items | 10,000 Items |
-| :--- | :--- | :--- |
-| $O(\log n)$ | 3 steps | 13 steps |
-| $O(n)$ | 10 steps | 10,000 steps |
-| $O(n \log n)$ | 33 steps | 130,000 steps |
-| $O(n^2)$ | 100 steps | 100,000,000 steps |`
+# MASTER THEOREM for T(n) = aT(n/b) + f(n):
+# Case 1: f(n) = O(n^(log_b(a) - e)) -> T(n) = Theta(n^log_b(a))
+# Case 2: f(n) = Theta(n^log_b(a)) -> T(n) = Theta(n^log_b(a) * log n)
+# Case 3: f(n) = Omega(n^(log_b(a)+e))-> T(n) = Theta(f(n))
+
+# Merge sort: T(n) = 2T(n/2) + O(n)
+# a=2, b=2: n^(log_2 2) = n^1 = n. f(n)=O(n) matches -> Case 2
+# T(n) = O(n log n) checkmark
+
+# AMORTIZED ANALYSIS — dynamic array doubling:
+# Each append: charge 3 units (1 for insert, 1 save for self, 1 save for another)
+# At doubling from k to 2k: need k copies, have k credits saved
+# Credits never go negative -> amortized cost = 3 = O(1) per append
+\`\`\``
   },
   {
     id: "6-2",
     number: "6.2",
     title: "Amortized Analysis: Banker's Method and Potential Method",
-    content: `Sometimes, a single operation is expensive, but it only happens rarely. **Amortized Analysis** gives us the "average cost per operation" over a long sequence.
+    content: `Sorting appears in query processing, search, compression, and as a precondition for dozens of other algorithms. The comparison sort lower bound of Omega(n log n) is proven by the decision tree argument: n! possible permutations require at least log2(n!) comparisons, and log2(n!) = Theta(n log n) by Stirling's approximation.
+Algorithm
+Best
+Average
+Worst
+Space
+Stable
+When to Use
+Insertion Sort
 
-## 1. The Aggregate Method
-Sum the total cost of $n$ operations and divide by $n$.
-*Example*: In a dynamic array, most \`push()\` calls are $O(1)$. The $O(n)$ resize happens only at powers of 2. The total cost for $n$ pushes is $\approx 3n$, so the amortized cost is $O(1)$.
+\`\`\`python
+O(n)
+O(n^2)
+O(n^2)
+O(1)
+\`\`\`
 
-## 2. The Banker's Method (Accounting Method)
-Think of time as money. We overcharge cheap operations and save the "surplus" as credit. When an expensive operation occurs, we use the credit to pay for it.
-- **Push**: Charge $3 units. $1 pays for the insertion, $2 is stored as credit.
-- **Resize**: Every element in the array already has $2 of credit—one to pay for its own move and one to pay for a "passive" element's move. The resize is "pre-paid."
+Yes
+n < 50; nearly sorted; online stream
+Merge Sort
 
-## 3. The Potential Method
-The most formal method. We define a **Potential Function** $\Phi$ representing the "stored energy" of the data structure.
-\`Amortized Cost = Actual Cost + Change in Potential (\Delta\Phi)\`
-If an operation is expensive but significantly simplifies the structure (reduces potential), the amortized cost remains low. This is used to prove the efficiency of **Splay Trees** and **Fibonacci Heaps**.`
+\`\`\`python
+O(n log n)
+O(n log n)
+O(n log n)
+O(n)
+\`\`\`
+
+Yes
+Stable required; linked lists; external sort
+Quicksort
+
+\`\`\`python
+O(n log n)
+O(n log n)
+O(n^2)
+O(log n)
+\`\`\`
+
+No
+Fastest in practice; large arrays; in-place
+Heap Sort
+
+\`\`\`python
+O(n log n)
+O(n log n)
+O(n log n)
+O(1)
+\`\`\`
+
+No
+Guaranteed n log n with O(1) space
+Timsort
+
+\`\`\`python
+O(n)
+O(n log n)
+O(n log n)
+O(n)
+\`\`\`
+
+Yes
+Python and Java default; real-world data
+Counting Sort
+
+\`\`\`python
+O(n+k)
+O(n+k)
+O(n+k)
+O(k)
+\`\`\`
+
+Yes
+Integer keys in small range [0,k)
+Radix Sort
+
+\`\`\`python
+O(nk)
+O(nk)
+O(nk)
+O(n)
+\`\`\`
+
+Yes
+Fixed-width integers; strings equal length
+
+
+\`\`\`python
+import random
+
+def quicksort(arr, lo=0, hi=None):
+\`\`\`
+
+'''
+In-place quicksort with random pivot and 3-way partition.
+
+\`\`\`python
+O(n log n) expected. O(n^2) worst case (vanishingly rare with random pivot).
+\`\`\`
+
+Fastest in practice: cache-friendly, in-place, low constant factor.
+'''
+
+\`\`\`python
+if hi is None: hi = len(arr) - 1
+if lo >= hi: return
+
+# Random pivot eliminates worst case for adversarial input
+pivot_idx = random.randint(lo, hi)
+\`\`\`
+
+arr[lo], arr[pivot_idx] = arr[pivot_idx], arr[lo]
+
+\`\`\`python
+pivot = arr[lo]
+
+# 3-WAY PARTITION (Dijkstra Dutch National Flag):
+# Partitions into: [< pivot | == pivot | > pivot]
+# Critical for arrays with many duplicates: O(n log n) not O(n^2)
+\`\`\`
+
+lt, i, gt = lo, lo, hi
+
+\`\`\`python
+while i <= gt:
+if arr[i] < pivot:
+\`\`\`
+
+arr[lt], arr[i] = arr[i], arr[lt]; lt += 1; i += 1
+
+\`\`\`python
+elif arr[i] > pivot:
+\`\`\`
+
+arr[i], arr[gt] = arr[gt], arr[i]; gt -= 1
+
+\`\`\`python
+# Don't increment i: new arr[i] not yet examined
+else:
+\`\`\`
+
+i += 1
+
+
+\`\`\`python
+# Recurse only on < and > regions; == region is fully sorted
+quicksort(arr, lo, lt - 1)
+quicksort(arr, gt + 1, hi)
+
+# WHY QUICKSORT IS FASTEST IN PRACTICE:
+# In-place: no auxiliary array needed unlike merge sort's O(n)
+# Cache-friendly: scans left-right and right-left (prefetcher works)
+# Low constant: few instructions per element comparison
+# 3-way: O(n) for arrays with many equal elements
+
+# TIMSORT — Python's and Java's default:
+# Detects 'runs' (already sorted subsequences) in input
+# Real-world data has natural ordering (timestamps, sorted IDs)
+# O(n) on already sorted input. Stable. O(n log n) worst case.
+# list.sort() and sorted() use Timsort in Python
+
+def counting_sort(arr, k): # O(n+k) — beats Omega(n log n) lower bound!
+\`\`\`
+
+'''Sort integers in [0, k). Uses key structure, not comparisons.'''
+
+\`\`\`python
+count = [0] * k
+for x in arr: count[x] += 1
+# Prefix sums for stable placement
+for i in range(1, k): count[i] += count[i-1]
+output = [0] * len(arr)
+for x in reversed(arr): # reversed for stability
+\`\`\`
+
+count[x] -= 1; output[count[x]] = x
+
+\`\`\`python
+return output
+
+# Counting sort is faster than Timsort when k is small (pixel values 0-255,
+# ratings 1-5, age in years 0-150). Radix sort extends this to large integers.
+\`\`\``
   },
   {
     id: "6-3",
     number: "6.3",
     title: "Recurrence Relations and the Master Theorem",
-    content: `Recursive algorithms (Divide and Conquer) require a different way to calculate complexity: **Recurrence Relations**.
+    content: `Graphs model relationships between entities. Every navigation system, package manager, social network, recommendation engine, and network router uses graph algorithms. Mastering them means mastering the most powerful problem-solving framework in computer science.
 
-## The Master Theorem
-For recurrences of the form: $T(n) = aT(n/b) + f(n)$
-Where:
-- $a$: Number of subproblems.
-- $n/b$: Size of each subproblem.
-- $f(n)$: Cost of the "work" done outside the recursive calls (divide and combine).
+\`\`\`python
+from collections import defaultdict, deque
+from typing import Dict, List, Optional, Any
+import heapq
+from math import inf
 
-Compare $f(n)$ with $n^{\log_b a}$ (the "critical value"):
-1.  If $f(n)$ is smaller, $T(n) = \Theta(n^{\log_b a})$.
-2.  If they are equal, $T(n) = \Theta(n^{\log_b a} \log n)$.
-3.  If $f(n)$ is larger, $T(n) = \Theta(f(n))$.
+# BFS: shortest path (fewest edges) in unweighted graphs
+def bfs_shortest_path(graph, start, end):
+\`\`\`
 
-## Examples
-- **Binary Search**: $T(n) = 1T(n/2) + O(1)$. $a=1, b=2 \to n^{\log_2 1} = n^0 = 1$. Equal $\to \Theta(\log n)$.
-- **Merge Sort**: $T(n) = 2T(n/2) + O(n)$. $a=2, b=2 \to n^{\log_2 2} = n^1 = n$. Equal $\to \Theta(n \log n)$.
-- **Strassen's Matrix Mult**: $T(n) = 7T(n/2) + O(n^2)$. $a=7, b=2 \to \log_2 7 \approx 2.81$. Case 1 $\to \Theta(n^{2.81})$.
+'''O(V+E) time and space. Correct because BFS explores by distance.'''
 
-If the Master Theorem doesn't apply (e.g., $T(n) = T(n-1) + n$), we use a **Recursion Tree** or the **Substitution Method**.`
+\`\`\`python
+if start == end: return [start]
+visited = {start}
+queue = deque([(start, [start])])
+while queue:
+\`\`\`
+
+node, path = queue.popleft()
+
+\`\`\`python
+for neighbor in graph.get(node, []):
+if neighbor == end: return path + [neighbor]
+if neighbor not in visited:
+\`\`\`
+
+visited.add(neighbor)
+queue.append((neighbor, path + [neighbor]))
+
+\`\`\`python
+return None # no path
+
+# DFS: topological sort, cycle detection, SCCs
+def topological_sort(graph, n):
+\`\`\`
+
+'''
+DFS-based topological sort. O(V+E).
+Returns None if cycle detected (no valid topological order).
+Uses 3-color marking: 0=unvisited, 1=in-progress, 2=done
+'''
+
+\`\`\`python
+color = [0] * n; result = []; cycle = [False]
+def dfs(v):
+if cycle[0]: return
+\`\`\`
+
+color[v] = 1
+
+\`\`\`python
+for u in graph.get(v, []):
+if color[u] == 1: cycle[0] = True; return # back edge = cycle
+if color[u] == 0: dfs(u)
+\`\`\`
+
+color[v] = 2; result.append(v)
+
+\`\`\`python
+for v in range(n):
+if color[v] == 0: dfs(v)
+if cycle[0]: return None
+return result[::-1] # reverse post-order = topological order
+
+# DIJKSTRA: shortest path in weighted non-negative graphs
+def dijkstra(graph, source, n):
+\`\`\`
+
+'''
+
+\`\`\`python
+O((V+E) log V) with binary heap.
+\`\`\`
+
+REQUIRES: all edge weights >= 0.
+For negative weights: use Bellman-Ford instead.
+'''
+
+\`\`\`python
+dist = [inf] * n; prev = [-1] * n; dist[source] = 0
+heap = [(0.0, source)]
+while heap:
+\`\`\`
+
+d, u = heapq.heappop(heap)
+
+\`\`\`python
+if d > dist[u]: continue # stale entry: skip
+for v, weight in graph.get(u, []):
+new_dist = dist[u] + weight
+if new_dist < dist[v]:
+\`\`\`
+
+dist[v] = new_dist; prev[v] = u
+heapq.heappush(heap, (new_dist, v))
+
+\`\`\`python
+return dist, prev
+
+# CORRECTNESS of Dijkstra (greedy invariant):
+# When u is popped with distance d, d is the true shortest distance.
+# Proof: any alternate path through unpopped vertex v has dist[v] >= d.
+# Adding positive edge weights can only increase distance further.
+# So no path through unpopped vertices can be shorter than d.
+# This proof FAILS if any edge weight is negative!
+
+# MINIMUM SPANNING TREE: Kruskal's algorithm
+class UnionFind:
+def __init__(self, n):
+\`\`\`
+
+self.parent = list(range(n)); self.rank = [0] * n
+
+\`\`\`python
+def find(self, x):
+if self.parent[x] != x:
+\`\`\`
+
+self.parent[x] = self.find(self.parent[x]) # path compression
+
+\`\`\`python
+return self.parent[x]
+def union(self, x, y):
+\`\`\`
+
+px, py = self.find(x), self.find(y)
+
+\`\`\`python
+if px == py: return False # already connected — adding creates cycle
+if self.rank[px] < self.rank[py]: px, py = py, px
+\`\`\`
+
+self.parent[py] = px # union by rank
+
+\`\`\`python
+if self.rank[px] == self.rank[py]: self.rank[px] += 1
+return True
+
+def kruskal(n, edges): # edges = [(weight, u, v), ...]
+\`\`\`
+
+'''O(E log E). Sort edges, add if no cycle (checked by Union-Find).'''
+
+\`\`\`python
+mst = []; uf = UnionFind(n)
+for weight, u, v in sorted(edges):
+if uf.union(u, v):
+\`\`\`
+
+mst.append((weight, u, v))
+
+\`\`\`python
+if len(mst) == n - 1: break # MST complete: V-1 edges
+return mst
+\`\`\``
   },
   {
     id: "6-4",
     number: "6.4",
     title: "Sorting: Why It Matters More Than You Think",
-    content: `Sorting is the most studied problem in computer science. It's not just about putting names in alphabetical order; it's about **enabling other algorithms**.
+    content: `Dynamic programming solves problems by breaking them into overlapping subproblems, solving each once, and storing results. It transforms exponential brute force into polynomial efficiency. The four steps: define the subproblem, write the recurrence, identify base cases, determine computation order.
 
-## Searching
-You cannot perform Binary Search on unsorted data. Sorting is the prerequisite for fast retrieval.
+\`\`\`python
+# DP STEP 1: Define the subproblem precisely
+# DP STEP 2: Write the recurrence (how dp[i] relates to smaller dp[j])
+# DP STEP 3: Identify base cases (smallest known subproblems)
+# DP STEP 4: Determine computation order (dependencies are ready)
 
-## De-duplication
-Finding duplicates in an unsorted list takes $O(n^2)$ or $O(n)$ with a Hash Set (memory expensive). On sorted data, it's a single linear scan ($O(n)$).
+# LONGEST COMMON SUBSEQUENCE (LCS)
+def lcs(s, t):
+\`\`\`
 
-## Closest Pair
-Finding the two closest numbers in a set:
-- Unsorted: $O(n^2)$ (check every pair).
-- Sorted: $O(n \log n)$ to sort, then $O(n)$ to check adjacent elements.
+m, n = len(s), len(t)
 
-## Set Operations
-Intersection, Union, and Difference between two sets are $O(n+m)$ if the inputs are sorted (the "Merge" step of Merge Sort).
+\`\`\`python
+# dp[i][j] = LCS length of s[:i] and t[:j]
+dp = [[0]*(n+1) for _ in range(m+1)]
+for i in range(1, m+1):
+for j in range(1, n+1):
+if s[i-1] == t[j-1]:
+\`\`\`
 
-## Real Systems
-Sorting is the heart of **Database Indexing**, **Log Processing**, and **Graphics Rendering Pipelines**. When you see "ORDER BY" in SQL, you are triggering a sophisticated sorting engine that might involve external merge sorts if the data doesn't fit in RAM.`
+dp[i][j] = dp[i-1][j-1] + 1 # extend LCS
+
+\`\`\`python
+else:
+\`\`\`
+
+dp[i][j] = max(dp[i-1][j], dp[i][j-1]) # skip one char
+
+\`\`\`python
+return dp[m][n]
+# T(n) = O(mn) time, O(mn) space (reducible to O(min(m,n)))
+
+# EDIT DISTANCE (Levenshtein)
+def edit_distance(s, t):
+\`\`\`
+
+m, n = len(s), len(t)
+
+\`\`\`python
+# dp[i][j] = min ops to transform s[:i] to t[:j]
+dp = [[0]*(n+1) for _ in range(m+1)]
+for i in range(m+1): dp[i][0] = i # delete i chars from s
+for j in range(n+1): dp[0][j] = j # insert j chars into s
+for i in range(1, m+1):
+for j in range(1, n+1):
+if s[i-1] == t[j-1]:
+\`\`\`
+
+dp[i][j] = dp[i-1][j-1] # no operation needed
+
+\`\`\`python
+else:
+\`\`\`
+
+dp[i][j] = 1 + min(
+dp[i-1][j], # delete s[i-1]
+dp[i][j-1], # insert t[j-1]
+dp[i-1][j-1] # substitute
+)
+
+\`\`\`python
+return dp[m][n]
+# Used by: spell checkers, diff tools, DNA alignment, fuzzy search
+
+# 0/1 KNAPSACK
+def knapsack(weights, values, W):
+n = len(weights)
+# dp[i][w] = max value using first i items, capacity w
+dp = [[0]*(W+1) for _ in range(n+1)]
+for i in range(1, n+1):
+\`\`\`
+
+wi, vi = weights[i-1], values[i-1]
+
+\`\`\`python
+for w in range(W+1):
+\`\`\`
+
+dp[i][w] = dp[i-1][w] # don't take item i
+
+\`\`\`python
+if wi <= w: # take item i if it fits
+\`\`\`
+
+dp[i][w] = max(dp[i][w], dp[i-1][w-wi] + vi)
+
+\`\`\`python
+return dp[n][W]
+# O(nW) pseudo-polynomial time — NP-Hard in general
+
+# LONGEST INCREASING SUBSEQUENCE: O(n log n)
+import bisect
+def lis(arr):
+tails = [] # tails[i] = smallest tail of IS of length i+1
+for x in arr:
+pos = bisect.bisect_left(tails, x)
+if pos == len(tails): tails.append(x) # extends longest IS
+else: tails[pos] = x # replaces: maintains smallest possible tail
+return len(tails)
+# [10,9,2,5,3,7,101,18] -> tails=[2,3,7,18] -> LIS length = 4
+\`\`\``
   },
   {
     id: "6-5",
     number: "6.5",
     title: "Insertion Sort, Shell Sort: Small n Champions",
-    content: `While $O(n \log n)$ algorithms are theoretically better, for small datasets (usually $n < 32$ or $n < 64$), **Insertion Sort** is often faster due to its incredibly low constant factors and $O(n)$ best-case performance.
+    content: `\`\`\`python
+# P: problems solvable in polynomial time O(n^k)
+# NP: problems where YES answer verifiable in polynomial time
+# NP-COMPLETE: hardest problems in NP (every NP problem reduces to them)
+# If ANY NP-complete problem has polynomial algorithm: P = NP
+# P vs NP is the most important open problem in mathematics
+# Most experts believe P != NP but no proof exists
 
-## Insertion Sort
-It builds the sorted array one item at a time.
-\`\`\`python
-for i in range(1, len(arr)):
-    key = arr[i]
-    j = i - 1
-    while j >= 0 and key < arr[j]:
-        arr[j + 1] = arr[j]
-        j -= 1
-    arr[j + 1] = key
+# KEY NP-COMPLETE PROBLEMS:
+# SAT: is there assignment making Boolean formula true?
+# 3-SAT: SAT with exactly 3 literals per clause
+# Vertex Cover: minimum vertex set covering all edges
+# Traveling Salesman: shortest tour visiting all cities
+# Knapsack (decision): can we get value >= V in capacity W?
+# Graph Coloring: can graph be colored with k colors (k>=3)?
+
+# PRACTICAL TOOLKIT FOR NP-HARD PROBLEMS:
+
+# 1. EXACT SOLVERS (for small n < 50-100):
+# Integer Linear Programming: Gurobi, CPLEX, CBC (free)
+# SAT solvers: MiniSAT, Z3 — surprisingly fast on real instances
+
+# 2. APPROXIMATION (polynomial, guaranteed ratio):
+def vertex_cover_2approx(graph):
 \`\`\`
-- **Online**: Can sort a list as it receives it.
-- **Stable**: Preserves the relative order of equal elements.
-- **Adaptive**: $O(n)$ on nearly-sorted data.
 
-## Shell Sort
-An optimization of Insertion Sort that allows the exchange of far-apart elements. It uses a **gap sequence**. It starts by sorting elements far apart, then gradually reduces the gap.
-- **Why?** Insertion sort is slow because it only moves elements one position at a time. Shell sort moves them long distances early on, "pre-sorting" the array.
-- **Complexity**: Depends on the gap sequence (e.g., $O(n^{1.3})$ or $O(n \log^2 n)$). It is often used in embedded systems where code space is limited but $O(n^2)$ is too slow.`
+'''2-approximation: result <= 2 * optimal size. O(V+E).'''
+
+\`\`\`python
+covered = set()
+edges = set()
+for u in graph:
+for v in graph[u]:
+if (v,u) not in edges: edges.add((u,v))
+while edges:
+\`\`\`
+
+u, v = next(iter(edges))
+covered.add(u); covered.add(v)
+
+\`\`\`python
+edges = {(a,b) for a,b in edges
+if a not in covered and b not in covered}
+return covered
+# WHY 2-APPROX: edges we pick form a matching M.
+# We add 2|M| vertices. OPT must include at least |M| vertices.
+# Our solution: 2|M| <= 2 * OPT
+
+# 3. HEURISTICS (no formal guarantee, fast in practice):
+# Simulated annealing, genetic algorithms, local search
+# 2-opt and 3-opt for TSP — finds near-optimal for n=10000
+
+# 4. SPECIAL STRUCTURE:
+# Knapsack with small W: O(nW) pseudo-polynomial
+# TSP on trees: O(n) trivial
+# Graph coloring on interval graphs: O(n log n)
+# Identify structure in YOUR instances before concluding intractable
+
+# REAL-WORLD NP-HARD SUCCESSES:
+# American Airlines scheduling optimizer: saves ~$500M/year
+# UPS ORION routing: saves 100M miles of driving per year
+# Chip layout (placement + routing): billions of transistors placed daily
+# These are solved with ILP + heuristics, not exact algorithms
+\`\`\``
   },
   {
     id: "6-6",
     number: "6.6",
     title: "Merge Sort: The Divide-and-Conquer Paradigm",
-    content: `Merge Sort is the textbook example of **Divide and Conquer**.
+    content: `Sorting benchmark: implement merge sort, quicksort (random pivot + 3-way), heapsort, counting sort. Benchmark on random, nearly sorted, reverse sorted, many duplicates. Plot time vs n for n = 1K to 1M. Explain in terms of cache and branch prediction.
+Dijkstra variants: implement with binary heap. Test on sparse (E=O(V)), dense (E=O(V^2)), and grid graphs. Explain which representation wins in each case and why.
+DP palindrome: find longest palindromic subsequence in a string. Define subproblem, write recurrence, implement bottom-up DP. Test: 'bbbab' expected 4, 'cbbd' expected 2.
+DP coin change: given denominations and target, find minimum coins and all combinations. Handle no-solution case. Test edge cases: amount=0, single coin equals target, no combination works.
+2-approximation TSP: build complete Euclidean graph, find MST, do DFS preorder walk. Compare to brute force exact for n<=12. Plot approximation ratio as n grows.
+Chapter 6 — Twelve Algorithm Engineering Truths
 
-1. **Divide**: Split the array into two halves.
-2. **Conquer**: Recursively sort the two halves.
-3. **Combine**: Merge the two sorted halves into one.
-
-## The Merge Step
-The magic happens here. We compare the heads of two sorted lists and pick the smallest.
 \`\`\`python
-def merge(left, right):
-    result = []
-    while left and right:
-        if left[0] <= right[0]:
-            result.append(left.pop(0))
-        else:
-            result.append(right.pop(0))
-    return result + left + right
+O(n^2) on 1M elements = 10^12 operations = 17 minutes. O(n log n) = 20M ops = 0.02 seconds. Algorithm choice is not a constant factor.
 \`\`\`
 
-## Key Characteristics
-- **Worst-case**: $O(n \log n)$.
-- **Stable**: Yes.
-- **Space**: $O(n)$. This is its biggest drawback. It requires an auxiliary array to perform the merge.
-- **External Sorting**: Merge Sort is the king of sorting data that doesn't fit in RAM (e.g., 10TB of logs). You sort chunks that fit in RAM and then perform a multi-way merge of the resulting "runs" on disk.`
+Comparison sort lower bound is Omega(n log n). Proven by decision tree: n! permutations require log2(n!) comparisons minimum.
+Quicksort is fastest in practice: cache-friendly, in-place, low constant. Random pivot prevents O(n^2) worst case. 3-way partition handles duplicates.
+Timsort exploits natural runs in real data. O(n) on sorted input. Python and Java default sort. Always use it unless you have specific reason not to.
+BFS finds shortest path in unweighted graphs. FIFO queue ensures closest nodes explored first. O(V+E) time and space.
+DFS with 3-color marking detects cycles and computes topological order in O(V+E). Gray back-edge means cycle.
+Dijkstra finds shortest path for non-negative weights. O((V+E) log V). Fails with negative weights — use Bellman-Ford.
+Kruskal's MST: sort edges, add if no cycle (Union-Find). O(E log E). MST has exactly V-1 edges. Prim's is better for dense graphs.
+DP: define subproblem precisely, write recurrence, identify base cases, determine computation order. This template solves LCS, edit distance, knapsack, LIS.
+DP correctness requires optimal substructure: optimal solution contains optimal sub-solutions. Verify this before applying DP.
+NP-hardness means worst-case intractable, not always intractable in practice. ILP solvers, approximation algorithms, and heuristics solve NP-hard daily.
+For NP-hard problems: identify structure, exploit special cases, use approximation with formal ratio, use ILP for small n. Never give up without trying these.`
   },
   {
     id: "6-7",
