@@ -5,444 +5,581 @@ export const CH12_SECTIONS: Section[] = [
     id: "12-1",
     number: "12.1",
     title: "What Refactoring Is and Is Not",
-    content: `**Refactoring** is a disciplined technique for restructuring an existing body of code, altering its internal structure without changing its external behavior. Its heart is a series of small behavior-preserving transformations. Each transformation (called a "refactoring") does little, but a sequence of these transformations can produce a significant restructuring. Because each refactoring is small, it's less likely to go wrong. The system is kept fully functional after each small step, reducing the risk of a major breakage.
+    content: `Refactoring is disciplined restructuring of existing code — changing its internal structure to make it easier to understand and modify, without changing what it does externally. It is NOT rewriting. It is NOT fixing bugs. It is NOT adding features. Mixing refactoring with behavior change is the source of most refactoring disasters.
+The key discipline: refactor in tiny, safe steps. Each step changes one thing about the structure. After each step, run the tests. If they pass, commit. If they fail, you know exactly which one step broke something. This makes refactoring safe even in large codebases without perfect test coverage.
+Refactoring is not optional. Code that is never refactored calcifies. Features become harder to add. Bugs become harder to fix. New engineers take longer to understand the system. The cost of reading and modifying the code grows every month it is not refactored. The teams that refactor continuously ship faster than the teams that save it for a dedicated sprint that never comes.
 
-## The Formal Definition
-Martin Fowler defines refactoring as "a change made to the internal structure of software to make it easier to understand and cheaper to modify without changing its observable behavior." The key word here is **observable**. To the user (or another part of the system), the code must behave exactly as it did before. If you are fixing a bug, you are not refactoring. If you are adding a feature, you are not refactoring. If you are improving performance (which might change observable behavior like execution time), you are technically not refactoring in the purest sense, though the techniques are often shared.
 
-## The Two Hats
-When you work on software, you should wear two distinct "hats": the **Feature Hat** and the **Refactoring Hat**.
-- **Feature Hat**: You are adding new functionality. You may add tests, you write code to make them pass. You track progress by how many requirements are met.
-- **Refactoring Hat**: You are improving the design of existing code. You do not add new functionality. You only move, rename, and restructure. You track progress by how much cleaner the code becomes.
-
-You should never wear both hats at the same time. If you realize you need to refactor while adding a feature, swap hats, refactor, and then swap back. Mixing the two is the primary cause of "refactoring regret," where a system ends up in a broken state with no clear path back to stability.
-
-## Why Refactor?
-Code naturally tends toward **entropy**. Without constant attention, the original design intent of a system is slowly obscured by patches, quick fixes, and changing requirements. Refactoring is the primary weapon against technical debt. It makes the code:
-1. **Understandable**: Code is for humans first, machines second.
-2. **Flexible**: A well-structured system is easier to extend.
-3. **Bug-Resistant**: Clean code makes bugs visible.
-
-| Aspect | Refactoring | Optimization | Bug Fixing |
-| :--- | :--- | :--- | :--- |
-| **External Behavior** | Unchanged | Unchanged (mostly) | Changed (corrected) |
-| **Internal Structure** | Improved | Often complicated | Varies |
-| **Primary Goal** | Maintainability | Performance | Correctness |
-
-Refactoring is not "cleaning up code" in a vague sense; it is a mechanical process of applying known patterns to achieve a verifiable result. If you don't have tests to verify that behavior hasn't changed, you aren't refactoring—you're just changing code and hoping for the best.`
+---`
   },
   {
     id: "12-2",
     number: "12.2",
     title: "When to Refactor: The Opportunistic Approach",
-    content: `A common mistake in industry is scheduling "refactoring phases" or "cleanup sprints." These are almost always failures. They are difficult to justify to stakeholders and often result in massive, breaking changes that are hard to merge. Instead, the most effective engineers use **Opportunistic Refactoring**, also known as the **Boy Scout Rule**: "Always leave the code cleaner than you found it."
+    content: `Extract Function is the most frequently used refactoring. You take a fragment of code, give it a descriptive name, and replace the fragment with a call to the new function. Use it whenever: a code block needs a comment to explain it, a block is duplicated, a block is too long to read without scrolling, or a block has a clear single purpose that the enclosing function does not have.
 
-## The Rule of Three
-Don't refactor just because you see something "ugly." Refactor when it provides immediate value. A common heuristic is the **Rule of Three**:
-1. When you do something for the first time, just get it done.
-2. When you do something similar a second time, you wince at the duplication, but you do the duplicate thing anyway.
-3. When you do something for the third time, you refactor.
+\`\`\`python
+# BEFORE: one long function doing everything
+def print_order_summary(order):
+# Print header
+print('=' * 50)
+print(f'ORDER #{order.id}')
+print(f'Date: {order.created_at.strftime("%Y-%m-%d")}')
+print('=' * 50)
 
-## The Refactoring Workflow
-Refactoring should be integrated into your daily workflow. The best times to refactor are:
-- **Preparatory Refactoring**: Refactor to make adding a new feature easier. If the current design makes a feature difficult to implement, change the design first, then add the feature.
-- **Comprehension Refactoring**: Refactor to understand. When you're trying to figure out what a piece of code does, rename variables and extract functions as you learn. This "activates" your understanding by embedding it in the code.
-- **Litter-Pickup Refactoring**: When you see code that is obviously messy, fix it as you pass through.
+# Print items
+for item in order.items:
+print(f' {item.name:<30} \${item.price/100:>8.2f}')
+if item.discount > 0:
+discount_amount = item.price * item.discount / 100
+print(f' {"Discount " + str(item.discount) + "%":<30} -\${discount_amount/100:>7.2f}')
 
-## When NOT to Refactor
-Refactoring is not a panacea. There are times when you should leave code alone:
-1. **When you should just rewrite**: If the code is a complete mess and doesn't work, refactoring it is like polishing a sinking ship. Start over.
-2. **When you are close to a deadline**: Refactoring has immediate costs for long-term gains. If the "long term" is tomorrow, stay focused on the delivery.
-3. **When you cannot test it**: Without a safety net, refactoring is gambling.
+# Print totals
+subtotal = sum(i.price for i in order.items)
+tax = int(subtotal * 0.08)
+total = subtotal + tax
+print('-' * 50)
+print(f' {"Subtotal":<30} \${subtotal/100:>8.2f}')
+print(f' {"Tax (8%)":<30} \${tax/100:>8.2f}')
+print(f' {"TOTAL":<30} \${total/100:>8.2f}')
+print('=' * 50)
 
-## Refactoring and Productivity
-There is a common myth that refactoring slows you down. In the short term (hours), yes. In the medium term (days/weeks), **Clean Code = Speed**. By maintaining a high-quality codebase, you avoid the "technical debt interest" that slows down every subsequent feature. High-performing teams refactor constantly because it is the only way to maintain a sustainable pace of delivery.`
+# AFTER: extracted functions — each does one thing
+def print_order_summary(order):
+print_order_header(order)
+print_order_items(order.items)
+print_order_totals(order.items)
+
+def print_order_header(order):
+print('=' * 50)
+print(f'ORDER #{order.id}')
+print(f'Date: {order.created_at.strftime("%Y-%m-%d")}')
+print('=' * 50)
+
+def print_order_items(items):
+for item in items:
+print(f' {item.name:<30} \${item.price/100:>8.2f}')
+if item.discount > 0:
+print_discount_line(item)
+
+def print_discount_line(item):
+discount_amount = item.price * item.discount / 100
+label = f'Discount {item.discount}%'
+print(f' {label:<30} -\${discount_amount/100:>7.2f}')
+
+def print_order_totals(items):
+subtotal = sum(i.price for i in items)
+tax = int(subtotal * 0.08)
+total = subtotal + tax
+print('-' * 50)
+print(f' {"Subtotal":<30} \${subtotal/100:>8.2f}')
+print(f' {"Tax (8%)":<30} \${tax/100:>8.2f}')
+print(f' {"TOTAL":<30} \${total/100:>8.2f}')
+print('=' * 50)
+
+# BENEFITS:
+# Each function is independently testable
+# print_order_totals can be reused (returns values, not prints, ideally)
+# Adding GST or VAT tax only touches print_order_totals
+# New engineer understands print_order_summary in 10 seconds
+\`\`\``
   },
   {
     id: "12-3",
     number: "12.3",
     title: "The Refactoring Safety Net: Tests First",
-    content: `Refactoring is defined by the preservation of behavior. Without a way to verify that behavior, you are simply "changing things." The only way to refactor safely at scale is to have a robust **Safety Net** of automated tests.
+    content: `Renaming is the simplest refactoring and one of the most valuable. When you understand code well enough to rename something, you have made the code easier to understand for the next reader without changing any behavior. Modern IDEs rename all usages in one operation — there is no excuse for living with a bad name.
 
-## The Prerequisites
-Before you touch a single line of code for refactoring purposes, you must ensure:
-1. **Tests Exist**: You have a suite of tests that cover the area you intend to change.
-2. **Tests are Green**: The tests pass before you start. Never refactor while tests are failing; you won't know if a failure was caused by your change or existed previously.
-3. **Tests are Reliable**: If tests are "flaky" (passing or failing randomly), they cannot serve as a safety net.
+\`\`\`python
+# BEFORE: names reveal nothing
+def calc(d, r, t):
+return d * r * t / 100
 
-## What Kind of Tests?
-Not all tests are created equal for refactoring. **Unit Tests** are the most valuable because they are fast and pinpoint exactly where a breakage occurred. However, if your refactoring involves changing the interaction between classes, you may need **Integration Tests**.
+result = calc(p, 0.05, 12)
 
-The goal is **Structural Independence**. A test that is too tightly coupled to the internal implementation of a class will break even if the refactoring is correct. This is called a "brittle test." Good refactoring tests focus on outcomes (inputs vs. outputs) rather than internal state or private method calls.
+# AFTER: names reveal everything
+def calculate_simple_interest(principal, annual_rate, months):
+return principal * annual_rate * months / 100
 
-## The Refactoring Cycle
-The process follows a tight loop:
-1. Check that the tests pass.
-2. Make a small change (e.g., rename one variable).
-3. Run the tests.
-4. If they pass, commit (internally or to Git).
-5. If they fail, undo the change.
+interest_earned = calculate_simple_interest(
+principal=account_balance,
+annual_rate=0.05,
+months=12
+\`\`\`
 
-By keeping the cycle short—often less than 60 seconds—you ensure that if a mistake is made, the cause is obvious.
+)
 
-## Dealing with Untested Code
-If you must refactor code that has no tests, your first task is not refactoring, but **Characterization Testing**. You write tests that observe the current behavior of the code (including its bugs) to create a "baseline." Once the baseline is established, you can begin the refactoring process. We will cover this in depth in the "Working with Legacy Code" chapter.
 
----
-**Pro Tip**: If your tests take more than a few seconds to run, you will stop running them. Invest in test performance so the "Refactoring Cycle" stays fast.`
+\`\`\`python
+# REFACTORING STEPS (safe rename):
+# 1. Use IDE rename (Ctrl+R in PyCharm, F2 in VS Code)
+# 2. IDE renames ALL occurrences simultaneously
+# 3. Run tests — they must all pass
+# 4. Commit with message: 'refactor: rename calc to calculate_simple_interest'
+
+# DO NOT DO MANUALLY:
+# Find-and-replace 'd' -> 'principal' across codebase
+# You will accidentally rename loop variables, field names, comments
+# Always use IDE rename — it is syntax-aware, not text-aware
+\`\`\``
   },
   {
     id: "12-4",
     number: "12.4",
     title: "Extract Function and Inline Function",
-    content: `**Extract Function** is perhaps the most frequently used refactoring. It is the process of taking a fragment of code and turning it into its own function with a name that explains the purpose of the code.
+    content: `\`\`\`python
+# BEFORE: magic numbers everywhere
+def calculate_shipping(weight_kg, distance_km):
+if weight_kg > 30:
+return weight_kg * distance_km * 0.085 + 15.00
+elif distance_km > 500:
+return weight_kg * distance_km * 0.065 + 8.50
+else:
+return weight_kg * distance_km * 0.045 + 3.00
 
-## Why Extract?
-The primary goal is to improve **Readability** and **Decomposition**. A function should do one thing, and its name should describe that thing. If you have to read several lines of code to understand what they do, those lines are candidates for extraction.
+# What is 30? What is 0.085? What is 15.00?
+# A new engineer cannot understand this without reading history or asking someone.
 
-### Before:
-\`\`\`python
-def print_owing(invoice):
-    print("***********************")
-    print("**** Customer Owes ****")
-    print("***********************")
-    
-    outstanding = 0
-    for order in invoice.orders:
-        outstanding += order.amount
-    
-    print(f"name: {invoice.customer}")
-    print(f"amount: {outstanding}")
-\`\`\`
+# AFTER: every number is named
+HEAVY_SHIPMENT_THRESHOLD_KG = 30
+LONG_DISTANCE_THRESHOLD_KM = 500
 
-### After:
-\`\`\`python
-def print_owing(invoice):
-    print_banner()
-    outstanding = calculate_outstanding(invoice)
-    print_details(invoice, outstanding)
+HEAVY_RATE_PER_KG_KM = 0.085
+LONG_DISTANCE_RATE_PER_KG_KM = 0.065
+STANDARD_RATE_PER_KG_KM = 0.045
 
-def print_banner():
-    print("***********************")
-    print("**** Customer Owes ****")
-    print("***********************")
+HEAVY_BASE_FEE = 15.00
+LONG_DISTANCE_BASE_FEE = 8.50
+STANDARD_BASE_FEE = 3.00
 
-def calculate_outstanding(invoice):
-    return sum(order.amount for order in invoice.orders)
+def calculate_shipping(weight_kg: float, distance_km: float) -> float:
+if weight_kg > HEAVY_SHIPMENT_THRESHOLD_KG:
+return weight_kg * distance_km * HEAVY_RATE_PER_KG_KM + HEAVY_BASE_FEE
+elif distance_km > LONG_DISTANCE_THRESHOLD_KM:
+return weight_kg * distance_km * LONG_DISTANCE_RATE_PER_KG_KM + LONG_DISTANCE_BASE_FEE
+else:
+return weight_kg * distance_km * STANDARD_RATE_PER_KG_KM + STANDARD_BASE_FEE
 
-def print_details(invoice, outstanding):
-    print(f"name: {invoice.customer}")
-    print(f"amount: {outstanding}")
-\`\`\`
-
-## The Reverse: Inline Function
-Sometimes, a function's body is as clear as its name. In this case, the extra layer of indirection is unnecessary and adds "cognitive noise." **Inline Function** replaces the function call with the function's body itself.
-
-### When to Inline:
-1. When the indirection provides no value.
-2. When a group of functions is badly factored and needs to be "collapsed" before being re-extracted correctly.
-3. When the function is just a delegation to another function with no added logic.
-
-## Mechanics
-When extracting, pay close attention to **Scope** and **Local Variables**. Variables that are read but not written can be passed as arguments. Variables that are written to become more complex; if only one is written, it can often be returned. If multiple are written, you may need to refactor further before extraction (e.g., Split Variable).`
+# NOW: the business rule is readable
+# Changing the heavy threshold: change ONE constant, not hunt through code
+# Unit tests can use the same constants: assert result == 30 * 100 * HEAVY_RATE_PER_KG_KM + HEAVY_BASE_FEE
+\`\`\``
   },
   {
     id: "12-5",
     number: "12.5",
     title: "Extract Variable and Inline Variable",
-    content: `While functions organize logic, **Variables** organize data within a function. **Extract Variable** (also known as "Introduce Explaining Variable") is used when an expression is complex or hard to understand.
+    content: `\`\`\`python
+# BEFORE: type-checking conditionals that grow forever
+def calculate_pay(employee):
+if employee.type == 'salaried':
+return employee.monthly_salary
+elif employee.type == 'hourly':
+return employee.hours_worked * employee.hourly_rate
+elif employee.type == 'contractor':
+return employee.days_worked * employee.daily_rate
+elif employee.type == 'commission': # added later
+return employee.base_salary + employee.sales * employee.commission_rate
+# Every new employee type: modify this function
+# Violates Open-Closed Principle
 
-## Extract Variable
-Complex logic, especially in conditional statements, can be difficult to parse. By extracting parts of the expression into variables with meaningful names, you document the code's intent.
+# AFTER: polymorphism — each type knows how to calculate its own pay
+from abc import ABC, abstractmethod
 
-### Before:
-\`\`\`javascript
-if ((platform.toUpperCase().indexOf("MAC") > -1) &&
-    (browser.toUpperCase().indexOf("IE") > -1) &&
-    wasInitialized() && resize > 0) {
-    // do something
-}
+class Employee(ABC):
+@abstractmethod
+def calculate_pay(self) -> float:
 \`\`\`
 
-### After:
-\`\`\`javascript
-const isMacOs = platform.toUpperCase().indexOf("MAC") > -1;
-const isIE = browser.toUpperCase().indexOf("IE") > -1;
-const wasResized = resize > 0;
+pass
 
-if (isMacOs && isIE && wasInitialized() && wasResized) {
-    // do something
-}
-\`\`\`
 
-The name of the variable acts as a comment that never gets out of sync with the code.
-
-## Inline Variable
-Conversely, if a variable doesn't communicate anything more than the expression itself, or if it gets in the way of other refactorings (like Extract Function), you should inline it.
-
-### Before:
 \`\`\`python
-base_price = order.base_price
-return base_price > 1000
+class SalariedEmployee(Employee):
+def __init__(self, monthly_salary: float):
 \`\`\`
 
-### After:
+self.monthly_salary = monthly_salary
+
 \`\`\`python
-return order.base_price > 1000
+def calculate_pay(self) -> float:
+return self.monthly_salary
+
+class HourlyEmployee(Employee):
+def __init__(self, hours_worked: float, hourly_rate: float):
 \`\`\`
 
-## When to use which?
-- **Extract Variable** when the expression is repeated or complex.
-- **Inline Variable** when the variable is used only once and the expression is clear.
+self.hours_worked = hours_worked
+self.hourly_rate = hourly_rate
 
-In modern IDEs (IntelliJ, VS Code), these refactorings are automated (often \`Ctrl+Alt+V\` for Extract and \`Ctrl+Alt+N\` for Inline). Automated refactoring is significantly safer than manual editing because the IDE handles scope and reference checking correctly.`
+\`\`\`python
+def calculate_pay(self) -> float:
+return self.hours_worked * self.hourly_rate
+
+class ContractorEmployee(Employee):
+def __init__(self, days_worked: int, daily_rate: float):
+\`\`\`
+
+self.days_worked = days_worked
+self.daily_rate = daily_rate
+
+\`\`\`python
+def calculate_pay(self) -> float:
+return self.days_worked * self.daily_rate
+
+class CommissionEmployee(Employee): # Adding new type: zero changes to existing code
+def __init__(self, base_salary: float, sales: float, commission_rate: float):
+\`\`\`
+
+self.base_salary = base_salary
+self.sales = sales
+self.commission_rate = commission_rate
+
+\`\`\`python
+def calculate_pay(self) -> float:
+return self.base_salary + self.sales * self.commission_rate
+
+# Usage — no conditional needed:
+total_payroll = sum(emp.calculate_pay() for emp in employees)
+# Adding new employee type: add new class, zero changes to existing code
+\`\`\``
   },
   {
     id: "12-6",
     number: "12.6",
     title: "Extract Class and Inline Class",
-    content: `As a system grows, a single class often takes on too many responsibilities. This is a violation of the **Single Responsibility Principle (SRP)** and leads to what is known as a "Large Class" smell. **Extract Class** is the solution.
-
-## Extract Class
-If you have a group of fields and methods that seem to belong together, move them into a new class. A good sign that a class needs extraction is when a subset of data and a subset of methods are always used together.
-
-### Example: The Person and the Phone
-A \`Person\` class might start with a few phone-related fields. As you add logic for formatting numbers and checking area codes, the \`Person\` class becomes bloated.
-
-**Before**: \`Person\` class has \`name\`, \`officeAreaCode\`, and \`officeNumber\`.
-**After**: \`Person\` class has a \`name\` and an \`officePhone\` field which holds an instance of a new \`TelephoneNumber\` class.
-
-\`\`\`typescript
-// Before
-class Person {
-  name: string;
-  officeAreaCode: string;
-  officeNumber: string;
-
-  get telephoneNumber() {
-    return \`(\${(this as any).officeAreaCode}) \${(this as any).officeNumber}\`;
-  }
-}
-
-// After
-class TelephoneNumber {
-  areaCode: string;
-  number: string;
-
-  get toString() {
-    return \`(\${(this as any).areaCode}) \${(this as any).number}\`;
-  }
-}
-
-class Person {
-  name: string;
-  officePhone: TelephoneNumber;
-
-  constructor() {
-    this.officePhone = new TelephoneNumber();
-  }
-
-  get telephoneNumber() {
-    return this.officePhone.toString;
-  }
-}
+    content: `\`\`\`python
+# BEFORE: class doing too many things (low cohesion)
+class Order:
+def __init__(self, items, customer_email):
 \`\`\`
 
-## Inline Class
-**Inline Class** is the reverse. If a class is no longer pulling its weight—perhaps because its responsibilities have been moved elsewhere—you fold it back into another class that uses it most. This reduces the "fragmentation" of the system.
+self.items = items
+self.customer_email = customer_email
 
-## The Strategy
-Don't be afraid to create small classes. A common hesitation is "I don't want too many files." However, ten small, focused classes are much easier to maintain and test than one "God Object" that does everything. Extracting classes is the primary way to achieve **Composition**, which is often more flexible than Inheritance.`
+
+\`\`\`python
+def calculate_subtotal(self): ...
+def calculate_tax(self): ...
+def calculate_total(self): ...
+def format_receipt_text(self): ... # formatting is not order's job
+def send_confirmation_email(self): ... # email is not order's job
+def validate_email_format(self): ... # validation is not order's job
+def log_to_analytics(self): ... # analytics is not order's job
+
+# AFTER: extract classes — each with single responsibility
+class Order:
+def __init__(self, items: list, customer: 'Customer'):
+\`\`\`
+
+self.items = items
+self.customer = customer
+
+
+\`\`\`python
+def calculate_subtotal(self) -> float:
+return sum(item.price for item in self.items)
+
+def calculate_tax(self, rate: float = 0.08) -> float:
+return self.calculate_subtotal() * rate
+
+def calculate_total(self) -> float:
+return self.calculate_subtotal() + self.calculate_tax()
+
+class ReceiptFormatter:
+def format_text(self, order: Order) -> str:
+lines = [f'ORDER #{order.id}']
+for item in order.items:
+\`\`\`
+
+lines.append(f' {item.name}: \${item.price:.2f}')
+lines.append(f'TOTAL: \${order.calculate_total():.2f}')
+
+\`\`\`python
+return '\\n'.join(lines)
+
+class OrderNotificationService:
+def __init__(self, email_client, formatter: ReceiptFormatter):
+\`\`\`
+
+self.email = email_client
+self.formatter = formatter
+
+
+\`\`\`python
+def send_confirmation(self, order: Order) -> None:
+receipt_text = self.formatter.format_text(order)
+\`\`\`
+
+self.email.send(order.customer.email, 'Order Confirmed', receipt_text)
+
+
+\`\`\`python
+# NOW: each class independently testable, reusable, modifiable
+# Changing receipt format: touch only ReceiptFormatter
+# Changing email provider: touch only OrderNotificationService
+# Changing tax calculation: touch only Order
+\`\`\``
   },
   {
     id: "12-7",
     number: "12.7",
     title: "Move Function and Move Field",
-    content: `The essence of good design is putting things where they belong. In Object-Oriented systems, this means placing behavior (functions) close to the data (fields) they operate on.
+    content: `\`\`\`python
+# INTRODUCE PARAMETER OBJECT: when multiple params always travel together
 
-## Move Function
-If a function in Class A uses methods or data from Class B more than its own class, it probably belongs in Class B. This is the fix for the **Feature Envy** smell.
+# BEFORE: lat/lon always passed together
+def find_nearby_restaurants(lat: float, lon: float, radius_km: float): ...
+def calculate_distance(lat1, lon1, lat2, lon2): ...
+def is_within_delivery_zone(lat, lon, zone_lat, zone_lon, zone_radius): ...
 
-### How to Move:
-1. Examine everything the function uses.
-2. If it's essentially calculating something for another object, move it there.
-3. Turn the old function into a simple delegation or remove it entirely.
+# AFTER: introduce Location object
+from dataclasses import dataclass
 
-### Example:
-A \`calculateBankCharge\` method in an \`Account\` class might depend heavily on the \`AccountType\` object. If all the logic is based on the type, move the logic to \`AccountType\`.
+@dataclass(frozen=True)
+class Location:
+\`\`\`
 
-## Move Field
-Similarly, if a field is used by another class more than the class it lives in, move the field. This often happens after a series of other refactorings.
+latitude: float
+longitude: float
 
-## Why Move?
-Moving functions and fields reduces **Coupling** and increases **Cohesion**.
-- **Cohesion**: The degree to which the elements inside a module belong together. High cohesion is good.
-- **Coupling**: The degree of interdependence between software modules. Low coupling is good.
 
-When logic is in the "wrong" place, you find yourself jumping between files constantly to understand a single flow. By moving things to their natural home, you make the system's structure more intuitive.
+\`\`\`python
+def distance_to(self, other: 'Location') -> float:
+# Haversine formula
+import math
+R = 6371 # Earth radius in km
+\`\`\`
 
----
-**The Clue**: If you find yourself passing an object as an argument to another object's method just so that method can call getters on it, you likely have a "Move Function" candidate.`
+lat1, lon1 = math.radians(self.latitude), math.radians(self.longitude)
+lat2, lon2 = math.radians(other.latitude), math.radians(other.longitude)
+
+\`\`\`python
+dlat = lat2 - lat1; dlon = lon2 - lon1
+a = math.sin(dlat/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
+return R * 2 * math.asin(math.sqrt(a))
+
+def is_within(self, center: 'Location', radius_km: float) -> bool:
+return self.distance_to(center) <= radius_km
+
+def find_nearby_restaurants(location: Location, radius_km: float): ...
+# Now callers build one Location object and pass it around
+# distance_to lives with the data that makes sense for it
+
+# PRESERVE WHOLE OBJECT: pass the object, not its fields
+# BEFORE: extracting fields and passing them separately
+def book_room(hotel_id, check_in_date, check_out_date, guest_name, guest_email):
+booking = Booking(
+hotel_id=hotel_id,
+check_in=check_in_date,
+check_out=check_out_date,
+guest_name=guest_name,
+guest_email=guest_email
+\`\`\`
+
+)
+
+
+\`\`\`python
+# Call site pulling fields apart:
+book_room(h.id, r.check_in, r.check_out, g.name, g.email)
+
+# AFTER: pass the objects
+def book_room(hotel: Hotel, reservation: ReservationRequest, guest: Guest):
+booking = Booking.from_objects(hotel, reservation, guest)
+
+book_room(hotel, reservation, guest) # cleaner, self-documenting
+# If Hotel grows new needed fields: no changes to call sites
+\`\`\``
   },
   {
     id: "12-8",
     number: "12.8",
     title: "Replace Conditional with Polymorphism",
-    content: `One of the most powerful refactorings for removing complexity is **Replace Conditional with Polymorphism**. If you have a \`switch\` statement or a long \`if-else\` chain that performs different actions based on the type of an object, you should use inheritance and polymorphism instead.
-
-## The Problem
-Switch statements based on type codes are "change magnets." Every time you add a new type, you have to find and update every switch statement across the codebase. This violates the **Open-Closed Principle** (code should be open for extension but closed for modification).
-
-### Before:
-\`\`\`python
-def get_speed(bird):
-    if bird.type == "EUROPEAN":
-        return bird.base_speed
-    elif bird.type == "AFRICAN":
-        return bird.base_speed - bird.load_factor * bird.num_coconuts
-    elif bird.type == "NORWEGIAN_BLUE":
-        return 0 if bird.is_nailed else bird.base_speed
-\`\`\`
-
-### After:
-\`\`\`python
-class Bird:
-    def get_speed(self):
-        pass
-
-class EuropeanBird(Bird):
-    def get_speed(self):
-        return self.base_speed
-
-class AfricanBird(Bird):
-    def get_speed(self):
-        return self.base_speed - self.load_factor * self.num_coconuts
-
-class NorwegianBlueBird(Bird):
-    def get_speed(self):
-        return 0 if self.is_nailed else self.base_speed
-\`\`\`
-
-## Benefits
-1. **Extensibility**: To add a new bird, you just create a new class. You don't touch existing code.
-2. **Clarity**: Each class contains only the logic relevant to its type.
-3. **Safety**: You eliminate the risk of forgetting to update one of many switch statements.
-
-## When to use?
-Use this when you have several parts of the system that vary based on the same type differentiation. If the conditional only appears once, the overhead of creating classes might not be worth it. But if the "Type" of an object is a fundamental concept in your domain, polymorphism is almost always the right choice.`
+    content: `Refactoring
+When to Use
+What It Does
+Extract Function
+Block needs comment, is duplicated, or does one thing
+Move code block into named function
+Inline Function
+Function body is as clear as its name
+Replace call with function body, delete function
+Rename Variable/Function
+Name does not reveal intent
+Use IDE rename — renames all usages safely
+Extract Variable
+Complex expression hard to read
+Store sub-expression in named variable
+Inline Variable
+Variable name adds nothing beyond its value
+Replace variable reference with its value
+Replace Magic Number with Constant
+Literal number in code with non-obvious meaning
+Create named constant at module/class level
+Replace Conditional with Polymorphism
+if/elif chain switching on type
+Abstract base class, subclass per type
+Replace Nested Conditional with Guard Clauses
+Deep nesting for validation/early exit
+Return early at the top for each edge case
+Extract Class
+Class has too many responsibilities
+Move related fields and methods to new class
+Move Method
+Method uses more data from another class than its own
+Move to the class whose data it uses most
+Introduce Parameter Object
+Group of params always pass together
+Create dataclass grouping the parameters
+Preserve Whole Object
+Extracting multiple fields from object for function
+Pass the whole object instead
+Replace Temp with Query
+Temporary variable used in single expression
+Replace with method call (enables reuse)
+Decompose Conditional
+Complex boolean condition hard to read
+Extract condition into named predicate function
+Consolidate Conditional
+Multiple conditions with same result
+Combine into single condition, extract to function
+Remove Dead Code
+Code that is never reached or used
+Delete it — version control preserves history`
   },
   {
     id: "12-9",
     number: "12.9",
     title: "Replace Loop with Pipeline",
-    content: `In modern programming, especially in languages with functional features (JS, Python, Java 8+, Ruby, Rust), loops are often less readable than collection pipelines. **Replace Loop with Pipeline** transforms a traditional \`for\` or \`while\` loop into a series of operations like \`map\`, \`filter\`, and \`reduce\`.
-
-## Why Pipelines?
-Pipelines describe **what** is being done rather than **how** it is being done. They are declarative. A reader can quickly scan the pipeline to see the data flow: "Filter the actives, map to their names, sort them, and take the top five."
-
-### Before:
-\`\`\`javascript
-const names = [];
-for (const i of input) {
-  if (i.job === "programmer") {
-    names.push(i.name);
-  }
-}
+    content: `\`\`\`python
+# BEFORE: deeply nested — the 'arrow anti-pattern'
+def process_payment(order, user, payment_method):
+if order is not None:
+if order.status == 'pending':
+if user is not None:
+if user.is_active:
+if payment_method is not None:
+if payment_method.is_valid:
+# actual work — buried 6 levels deep
+charge = stripe.charge(payment_method.token, order.total)
 \`\`\`
 
-### After:
-\`\`\`javascript
-const names = input
-  .filter(i => i.job === "programmer")
-  .map(i => i.name);
+order.status = 'paid'
+
+\`\`\`python
+return charge
+else:
+return {'error': 'invalid payment method'}
+else:
+return {'error': 'no payment method'}
+else:
+return {'error': 'user inactive'}
+else:
+return {'error': 'user not found'}
+else:
+return {'error': 'order not pending'}
+else:
+return {'error': 'order not found'}
+
+# AFTER: guard clauses — validate first, work at the end
+def process_payment(order, user, payment_method):
+if order is None: raise OrderNotFoundError()
+if order.status != 'pending': raise InvalidOrderStateError(order.status)
+if user is None: raise UserNotFoundError()
+if not user.is_active: raise UserInactiveError(user.id)
+if payment_method is None: raise NoPaymentMethodError()
+if not payment_method.is_valid: raise InvalidPaymentMethodError()
+
+# The happy path — not buried, reads naturally
+charge = stripe.charge(payment_method.token, order.total)
 \`\`\`
 
-## The Pipeline Toolkit
-- **Filter**: Removes elements that don't match a predicate.
-- **Map**: Transforms each element.
-- **Reduce / Fold**: Combines all elements into a single value (e.g., sum).
-- **Find / Some / Every**: Checks for existence or conditions.
+order.status = 'paid'
 
-## Performance Considerations
-In languages like Python or JavaScript, pipelines can sometimes be slightly slower than a highly optimized imperative loop due to function call overhead or intermediate object creation. However, the difference is usually negligible (nanoseconds) compared to the gains in **Maintainability**. Unless you are in a tight inner loop processing millions of items, favor the pipeline.
+\`\`\`python
+return charge
 
-In languages like Rust or C++ (with C++20 ranges), the compiler can often optimize pipelines into the same machine code as a manual loop, giving you the best of both worlds.`
+# BENEFITS:
+# Maximum nesting: 0 levels (flat code)
+# Each validation independently testable
+# New validation: add one guard clause at top
+# The happy path is immediately visible
+# Errors carry specific context (which guard clause fired)
+\`\`\``
   },
   {
     id: "12-10",
     number: "12.10",
     title: "Replace Primitive with Object (Value Objects)",
-    content: `Early in development, we often represent simple concepts with primitive types (strings, integers). A phone number is a string, a price is a float, a date range is two dates. As the system evolves, logic starts to cluster around these primitives. This is the **Primitive Obsession** smell.
+    content: `\`\`\`python
+# THE SAFE REFACTORING PROCESS — never lose working code
 
-## Value Objects
-**Value Objects** are small objects whose equality is based on their value, not their identity. By replacing a primitive with an object, you provide a home for the logic that belongs with that data.
+# STEP 1: Ensure tests exist before refactoring
+# If no tests: write characterization tests first
+# (tests that capture current behavior, even if wrong)
+# The goal: tests that will catch ANY behavioral change
 
-### Example: The Money Class
-Floating point numbers are notorious for rounding errors in financial calculations. By creating a \`Money\` object, you can encapsulate the rounding logic and the currency.
+# STEP 2: Take tiny steps
+# One refactoring at a time
+# Run tests after EVERY single change
+# If tests fail: revert that one change and try differently
 
-\`\`\`python
-# Before
-price = 9.99
-tax = price * 0.05
+# STEP 3: Commit after each successful step
+# git commit -m 'refactor: extract validate_payment_method function'
+# Each commit is a save point — revert is trivial if needed
+# This also makes code review much easier: reviewers see intent
 
-# After
-class Money:
-    def __init__(self, amount, currency):
-        self.amount = amount
-        self.currency = currency
-    
-    def add(self, other):
-        # check currency, handle rounding
-        return Money(self.amount + other.amount, self.currency)
+# STEP 4: Separate refactoring commits from behavior change commits
+# NEVER mix refactoring and bug fixes in one commit
+# NEVER mix refactoring and new features in one commit
+# Keep them separate so git blame and git bisect stay useful
 
-price = Money(999, "USD") # amount in cents
-\`\`\`
+# STEP 5: Use your IDE — not manual find-replace
+# IDE refactoring tools are syntax-aware
+# Manual find-replace breaks unrelated things
 
-## Indicators for this Refactoring:
-1. **Validation**: If you find yourself checking if a string is a valid email in multiple places, create an \`Email\` class.
-2. **Formatting**: If you have logic to format a phone number for display, it belongs in a \`PhoneNumber\` class.
-3. **Behavior**: If you find yourself passing two values together constantly (like \`start_date\` and \`end_date\`), they should likely be a \`DateRange\` object.
+# REFACTORING COMMIT MESSAGE FORMAT:
+# refactor: extract validate_order function from process_order
+# refactor: rename calc to calculate_simple_interest
+# refactor: replace magic numbers with named constants in shipping module
+# refactor: introduce Location dataclass for lat/lon parameters
 
-Value objects should ideally be **Immutable**. Once created, they cannot be changed; instead, operations return a new instance. This eliminates a whole class of bugs related to shared state and side effects.`
+# WHEN NOT TO REFACTOR:
+# During a production incident (stability over cleanliness)
+# In code you are about to delete
+# When you do not have tests and cannot write them
+# (exception: you must first write characterization tests)
+# When you are on a hard deadline
+# (schedule refactoring for the next sprint instead)
+\`\`\``
   },
   {
     id: "12-11",
     number: "12.11",
     title: "Replace Parameter with Query",
-    content: `A function's interface (its signature) should be as simple as possible. If a function is receiving a value as a parameter, but it could easily look up that value itself, you should **Replace Parameter with Query**.
+    content: `EXTRACT FUNCTION: Take any function longer than 20 lines in a codebase you own or any open-source project. Extract at least 3 functions from it. Each extracted function must have a name that makes the parent function readable without looking at the extracted body. Run tests before and after to verify nothing changed.
+REPLACE CONDITIONAL WITH POLYMORPHISM: Find a function or class with an if/elif chain switching on a type field. Refactor using abstract base class and subclasses. Add one new type entirely in the new class without touching existing classes.
+GUARD CLAUSE REFACTORING: Find a function with 3+ levels of nesting. Refactor to use guard clauses. Measure cyclomatic complexity before and after (use radon in Python: pip install radon; radon cc -a yourfile.py).
+FULL REFACTORING SESSION: Take any 100-line module and apply at least 5 different refactorings from the catalog. Document: which refactoring, why you applied it, what improved. Verify tests pass after each step.
+EXTRACT CLASS: Find a class with more than 7 methods covering multiple responsibilities. Extract at least 2 new classes. Move the appropriate methods to each. Verify all tests still pass. Write new tests for the extracted classes independently.
+Chapter 12 — Ten Refactoring Truths
+Refactoring changes structure without changing behavior. Never mix refactoring with bug fixes or feature additions in the same commit.
+Take tiny steps: one refactoring, run tests, commit. If tests fail, you know exactly which single step broke something.
+Extract Function is the most valuable refactoring. Any block needing a comment to explain it should become a named function.
+Use IDE rename — never manual find-replace. IDE rename is syntax-aware. Manual rename breaks unrelated code.
+Replace magic numbers with named constants immediately. The name explains WHY the number exists. One change location when business rules change.
+Replace nested conditionals with guard clauses. Validate at the top and return early. The happy path should be flat and visible.
+Replace type-switch conditionals with polymorphism. Adding a new type should require zero changes to existing code.
+The Boy Scout Rule: leave every function you touch cleaner than you found it. Continuous small improvements prevent big rewrites.
+Always have tests before refactoring. Without tests, you cannot verify you have not changed behavior. Write characterization tests first.
+Separate refactoring commits keep git blame useful. Future engineers (including you) can see WHY each change was made.
 
-## The Goal
-Reducing the number of parameters makes the function easier to call and reduces coupling between the caller and the callee. The caller doesn't need to know where the data comes from; the function handles it.
+CHAPTER 13
+WORKING WITH LEGACY CODE
+How to Safely Change Code Without Tests, Understand Systems You Did Not Write, and Rescue Codebases From Themselves
 
-### Before:
-\`\`\`javascript
-const basePrice = quantity * itemPrice;
-const finalPrice = discountPrice(basePrice, discountLevel);
-
-function discountPrice(basePrice, discountLevel) {
-  if (discountLevel === 2) return basePrice * 0.9;
-  else return basePrice * 0.95;
-}
-\`\`\`
-
-### After:
-\`\`\`javascript
-const finalPrice = discountPrice();
-
-function discountPrice() {
-  const basePrice = quantity * itemPrice;
-  const level = getDiscountLevel(); // Query replaces parameter
-  if (level === 2) return basePrice * 0.9;
-  else return basePrice * 0.95;
-}
-\`\`\`
-
-## When to avoid this?
-You should NOT use this refactoring if:
-1. **Purity**: You want the function to be a "Pure Function" (no side effects, output depends only on inputs) for testing or concurrency reasons.
-2. **Dependency**: Looking up the value would introduce an unwanted dependency (e.g., the function would now have to know about a global configuration object).
-
-The general rule is: if the function can get the information it needs without increasing complexity or breaking architectural boundaries, it should do so. This makes the caller's life simpler.`
+"Legacy code is simply code without tests. It is code we are afraid to change." — Michael Feathers, Working Effectively with Legacy Code`
   },
   {
     id: "12-12",
