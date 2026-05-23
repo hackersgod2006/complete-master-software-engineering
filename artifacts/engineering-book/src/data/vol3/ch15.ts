@@ -5,233 +5,484 @@ export const CH15_SECTIONS: Section[] = [
     id: "15-1",
     number: "15.1",
     title: "What Software Design Actually Is",
-    content: `Software design is not a phase; it is a continuous activity of managing complexity. Many junior engineers mistake design for "drawing diagrams" or "choosing a framework." In reality, **Software Design** is the process of deciding how to decompose a complex problem into a set of simpler, manageable pieces and defining the interfaces between those pieces.
+    content: `Software design principles are not rules invented by academics. They are distilled observations from thousands of production systems about what kinds of structures survive change and what kinds collapse under it. A codebase that violates these principles is not just aesthetically unpleasant — it is expensive. Features take longer to add. Bugs are harder to fix. New engineers take months to become productive. The principles in this chapter are the engineering equivalent of load-bearing walls: violate them and the structure eventually collapses under its own weight.
 
-Design happens every time you name a variable, extract a method, or define a class. It is the art of trade-offs. As John Ousterhout famously argued, the most important goal of software design is to reduce the **complexity** of the system. If a design makes the system harder to understand or more difficult to change, it has failed, regardless of how many "patterns" it uses.
 
-## The Nature of the Problem
-Unlike physical engineering, where the cost of materials often dominates, in software engineering, the dominant cost is **human cognition**. We are limited by our short-term memory (Miller's Law suggests we can hold about 7 items). A well-designed system allows a developer to work on one part of the system without needing to hold the entire codebase in their head.
-
-## Design vs. Implementation
-Design is the *intentional* structure. Implementation is the *execution*.
-- **Design:** "We will use a plugin architecture where data sources are abstracted through a common interface."
-- **Implementation:** Writing the specific \`PostgreSQLConnector\` class.
-
-A system with a good implementation but a bad design is a "big ball of mud" that is fast to build initially but eventually becomes impossible to maintain. A system with a good design but a poor implementation is a "diamond in the rough"—it can be polished and optimized without breaking the rest of the world.
-
-The ultimate measure of design quality is **changeability**. How much work is required to add a new feature? How many files do you have to touch? If the answer is "too many," your design is the bottleneck.`
+---`
   },
   {
     id: "15-2",
     number: "15.2",
     title: "Complexity: The Root of All Software Evil",
-    content: `If you want to be a master architect, you must become a student of complexity. **Complexity** is anything that makes it hard to understand or modify a system. It is cumulative. Small "shortcuts" in a codebase aren't dangerous in isolation, but over thousands of lines, they create a "death by a thousand cuts."
+    content: `A module, class, or function should have one and only one reason to change. A reason to change is a source of change: the business rules team, the database team, the UI team, the reporting team. If a class changes when the business rules change AND when the database schema changes AND when the reporting format changes, it has three reasons to change — and any one of those changes can break the other two concerns.
 
-Complexity manifests in three primary ways:
-1. **Change Amplification:** A simple change requires modifications in many different places.
-2. **Cognitive Load:** A developer must know a vast amount of information to complete a task.
-3. **Unknown Unknowns:** It is not obvious which parts of the code must be modified to achieve a goal, or what the side effects will be.
+\`\`\`python
+# VIOLATION: UserManager has reasons to change from 3 different sources
+class UserManager:
+# Reason 1: business rules change (authentication logic)
+def authenticate(self, email, password): ...
+def change_password(self, user_id, new_password): ...
 
-## The Equation of Complexity
-We can think of complexity ($C$) as:
-$C = \sum_{p} (c_p \times t_p)$
-Where $c_p$ is the complexity of a part $p$, and $t_p$ is the time developers spend working on that part. This reveals a critical insight: **complexity in a rarely touched corner of the system is less damaging than complexity in the core engine.**
+# Reason 2: database schema changes (persistence)
+def save_to_db(self, user): ...
+def load_from_db(self, user_id): ...
+def update_in_db(self, user): ...
 
-## Symptoms of Complexity
-- **Dependencies:** One piece of code cannot be understood without understanding another.
-- **Obscurity:** Important information is hidden or non-obvious (e.g., a generic variable name like \`data\` or a side effect in a getter).
-- **Repetition:** When logic is duplicated, it doubles the surface area for bugs and changes.
+# Reason 3: report format changes (reporting)
+def generate_user_report(self): ...
+def export_to_csv(self): ...
 
-## Fighting Back
-The goal is not to eliminate complexity (which is impossible for non-trivial problems) but to **manage** it. We do this through **abstraction**—the process of providing a simplified view of a complex entity. A good abstraction hides details that aren't important for the current task, allowing the mind to focus on the problem at hand.`
+# CORRECT: one class per reason to change
+class AuthenticationService:
+def authenticate(self, email: str, password: str) -> 'User': ...
+def change_password(self, user_id: int, new_password: str) -> None: ...
+
+class UserRepository:
+def save(self, user: 'User') -> 'User': ...
+def find_by_id(self, user_id: int) -> 'User': ...
+def update(self, user: 'User') -> 'User': ...
+
+class UserReportGenerator:
+def generate_activity_report(self, date_range) -> str: ...
+def export_user_list_csv(self) -> bytes: ...
+
+# NOW: changing the database schema touches ONLY UserRepository
+# Changing authentication algorithm touches ONLY AuthenticationService
+# Changing report format touches ONLY UserReportGenerator
+# Zero cross-contamination between concerns
+\`\`\``
   },
   {
     id: "15-3",
     number: "15.3",
     title: "Deep Modules vs Shallow Modules",
-    content: `One of the most powerful concepts in software design is the distinction between **Deep** and **Shallow** modules. This concept, popularized by John Ousterhout, provides a clear metric for evaluating the quality of an abstraction.
+    content: `Software entities should be open for extension but closed for modification. When new requirements arrive, you should be able to add new behavior by adding new code — not by changing existing, tested, deployed code. Changing existing code risks breaking things that were already working. Adding new code is safe.
 
-A module (class, function, or microservice) is best described by its **interface** (what it does) and its **implementation** (how it does it).
+\`\`\`python
+# VIOLATION: adding new discount type requires modifying existing code
+def calculate_discount(order, discount_type):
+if discount_type == 'percentage':
+return order.total * 0.10
+elif discount_type == 'fixed':
+return 10.00
+elif discount_type == 'buy_two_get_one': # NEW: had to modify function
+return order.items[0].price if len(order.items) >= 3 else 0
+# Every new discount type: modify this function, risk breaking others
 
-## Deep Modules
-A **Deep Module** is one that provides a powerful functionality through a simple, narrow interface. It hides a great deal of internal complexity.
-- **Example:** The Unix \`open()\` system call. It takes a filename and some flags. Internally, it handles file systems, permissions, disk drivers, caching, and concurrent access. This is the gold standard of design.
-- **Example:** A garbage collector. The interface is invisible (it just runs), but the implementation is incredibly complex.
+# CORRECT: open for extension via new classes, closed for modification
+from abc import ABC, abstractmethod
 
-## Shallow Modules
-A **Shallow Module** is one that has a complex interface relative to the small amount of functionality it provides.
-- **Example:** A class that is just a wrapper around another class, adding no new logic but requiring the developer to learn its specific method signatures.
-- **Example:** A "Link List" class that requires the user to manually manage head and tail pointers.
+class DiscountStrategy(ABC):
+@abstractmethod
+def calculate(self, order) -> float:
+\`\`\`
 
-## The "Cost of Interface"
-Every interface you define adds to the cognitive load of the system. If an interface doesn't hide significantly more complexity than it introduces, it is not earning its keep.
+pass
 
-| Feature | Deep Module | Shallow Module |
-| :--- | :--- | :--- |
-| **Interface** | Simple / Small | Complex / Large |
-| **Functionality** | Large / Complex | Small / Simple |
-| **Value** | High (High leverage) | Low (Overhead) |
 
-**Professor's Tip:** When designing a class, ask yourself: "Am I hiding details, or am I just exposing them in a different way?" If you find yourself writing "pass-through" methods that just call another object, you are likely creating a shallow module. Merge it or refactor.`
+\`\`\`python
+class PercentageDiscount(DiscountStrategy):
+def __init__(self, percentage: float):
+\`\`\`
+
+self.percentage = percentage
+
+\`\`\`python
+def calculate(self, order) -> float:
+return order.total * self.percentage
+
+class FixedDiscount(DiscountStrategy):
+def __init__(self, amount: float):
+\`\`\`
+
+self.amount = amount
+
+\`\`\`python
+def calculate(self, order) -> float:
+return min(self.amount, order.total)
+
+class BuyTwoGetOneDiscount(DiscountStrategy):
+def calculate(self, order) -> float:
+if len(order.items) >= 3:
+cheapest = min(order.items, key=lambda i: i.price)
+return cheapest.price
+return 0.0
+
+# Adding new discount type: add new class, ZERO changes to existing code
+class LoyaltyPointsDiscount(DiscountStrategy):
+def calculate(self, order) -> float:
+return order.customer.loyalty_points * 0.01
+
+def apply_discount(order, strategy: DiscountStrategy) -> float:
+return strategy.calculate(order)
+
+# Existing tests still pass. New class gets its own tests.
+\`\`\``
   },
   {
     id: "15-4",
     number: "15.4",
     title: "Information Hiding: The Most Important Design Principle",
-    content: `If there is one principle that stands above all others in software design, it is **Information Hiding**. First articulated by David Parnas in 1972, it states that each module should hide a specific design decision from the rest of the system.
+    content: `If S is a subtype of T, then objects of type T may be replaced with objects of type S without altering the correctness of the program. In plain language: subclasses must be fully substitutable for their parent classes. A subclass that overrides a method and makes it do something unexpected, raises exceptions the parent does not, or has different preconditions violates LSP and creates hidden bugs.
 
-Information hiding is the "how" of creating deep modules. By hiding a secret (like the data structure used or the specific algorithm implemented), you ensure that if that secret changes, nothing else in the system needs to change.
+\`\`\`python
+# VIOLATION: Square is NOT substitutable for Rectangle
+class Rectangle:
+def __init__(self, width: float, height: float):
+\`\`\`
 
-## What Should We Hide?
-We should hide things that are **likely to change**:
-- **Hardware dependencies:** Disk I/O, network protocols.
-- **Data formats:** JSON vs. XML, internal database schemas.
-- **Complex algorithms:** Optimization logic, search heuristics.
-- **Policy vs. Mechanism:** *How* to calculate a tax vs. *what* the current tax rate is.
+self.width = width
+self.height = height
 
-## Information Leakage
-The opposite of information hiding is **Information Leakage**. This happens when a design decision is reflected in multiple modules.
-- **Temporal Leakage:** When a module requires you to call \`init()\` before \`doWork()\`. The caller "knows" about the internal state requirements.
-- **Back-door Leakage:** When two modules share a global variable or a specific file format that isn't abstracted.
 
-## Example: The "Configuration" Leak
-Consider a module that needs to connect to a database.
-- **Bad Design:** The module asks for a \`ConfigObject\`, extracts the \`db_user\`, \`db_pass\`, and \`db_url\`. The module now "knows" about the structure of your configuration file.
-- **Good Design:** The module asks for a \`ConnectionPool\` object. It doesn't know where the credentials came from or what database type it is.
+\`\`\`python
+def set_width(self, w: float): self.width = w
+def set_height(self, h: float): self.height = h
+def area(self) -> float: return self.width * self.height
 
-By hiding the "how" of the connection, you make it possible to switch from a local config file to an AWS Secret Manager without touching the business logic. **The secret is the boundary.**`
+class Square(Rectangle): # Seems logical: square IS a rectangle
+def set_width(self, w: float):
+\`\`\`
+
+self.width = w
+self.height = w # VIOLATION: unexpected side effect
+
+\`\`\`python
+def set_height(self, h: float):
+\`\`\`
+
+self.height = h
+self.width = h # VIOLATION: unexpected side effect
+
+
+\`\`\`python
+# This function works correctly with Rectangle:
+def test_rectangle(r: Rectangle):
+\`\`\`
+
+r.set_width(5)
+r.set_height(4)
+
+\`\`\`python
+assert r.area() == 20 # works for Rectangle
+# FAILS for Square: set_height(4) also sets width=4, so area()=16
+
+# CORRECT: do not force an inheritance hierarchy that violates behavior
+class Shape(ABC):
+@abstractmethod
+def area(self) -> float: pass
+
+class Rectangle(Shape):
+def __init__(self, width: float, height: float):
+\`\`\`
+
+self.width = width; self.height = height
+
+\`\`\`python
+def area(self) -> float: return self.width * self.height
+
+class Square(Shape):
+def __init__(self, side: float): self.side = side
+def area(self) -> float: return self.side ** 2
+
+# Both are Shapes. Neither is a subtype of the other.
+# LSP holds: any Shape can be used where Shape is expected.
+
+# LSP RULES:
+# Preconditions cannot be strengthened in a subclass
+# Postconditions cannot be weakened in a subclass
+# Invariants of the superclass must be preserved
+# History constraint: subclass methods cannot produce states
+# that would be invalid from the superclass perspective
+\`\`\``
   },
   {
     id: "15-5",
     number: "15.5",
     title: "The SOLID Principles — Complete Treatment",
-    content: `The **SOLID** principles, popularized by Robert C. Martin ("Uncle Bob") in the early 2000s, are five design principles intended to make software designs more understandable, flexible, and maintainable. While they originated in Object-Oriented Programming, their core wisdom applies to functional programming and microservices as well.
+    content: `\`\`\`python
+# VIOLATION: fat interface forces clients to depend on methods they do not use
+from abc import ABC, abstractmethod
 
-SOLID is an acronym for:
-1. **S**ingle Responsibility Principle
-2. **O**pen-Closed Principle
-3. **L**iskov Substitution Principle
-4. **I**nterface Segregation Principle
-5. **D**ependency Inversion Principle
+class Worker(ABC): # Too broad — not all workers do all things
+@abstractmethod
+def work(self): pass
+@abstractmethod
+def eat(self): pass
+@abstractmethod
+def sleep(self): pass
+@abstractmethod
+def take_vacation(self): pass
 
-## Why SOLID?
-Before SOLID, software often suffered from "Rigidity" (hard to change), "Fragility" (breaks in unexpected places), and "Immobility" (hard to reuse). These principles act as a guide to prevent these "smells."
+class Robot(Worker): # Robot cannot eat/sleep/take_vacation!
+def work(self): print('robot working')
+def eat(self): raise NotImplementedError('Robots do not eat')
+def sleep(self): raise NotImplementedError('Robots do not sleep')
+def take_vacation(self): raise NotImplementedError('Robots do not vacation')
 
-## The "Complete Treatment"
-In the following sections, we will dive deep into each. However, it is vital to remember that SOLID is not a set of laws. They are **heuristics**. Over-applying them can lead to "over-engineering"—a system so fragmented into tiny pieces that the logic is impossible to follow.
+# CORRECT: segregate into focused interfaces
+class Workable(ABC):
+@abstractmethod
+def work(self): pass
 
-The master engineer uses SOLID to resolve specific tensions in the code. If you find a class is getting too large, apply **SRP**. If you find yourself writing long \`if/else\` chains based on object types, apply **OCP**.
+class Feedable(ABC):
+@abstractmethod
+def eat(self): pass
 
----
-**The SOLID Roadmap:**
-- **SRP** handles the internal structure of a module.
-- **OCP** and **LSP** handle the relationships between classes and inheritance.
-- **ISP** handles how we expose our modules to the world.
-- **DIP** handles the high-level architecture and dependencies.
+class Restable(ABC):
+@abstractmethod
+def sleep(self): pass
+@abstractmethod
+def take_vacation(self): pass
 
-Applied correctly, these principles transform a "Big Ball of Mud" into a set of independent, composable components.`
+class HumanWorker(Workable, Feedable, Restable):
+def work(self): print('human working')
+def eat(self): print('human eating')
+def sleep(self): print('human sleeping')
+def take_vacation(self): print('human on vacation')
+
+class RobotWorker(Workable):
+def work(self): print('robot working')
+# Robot only implements what it actually supports — no NotImplementedError
+
+# PYTHON NOTE: Python uses duck typing — formal interfaces (ABC) are optional.
+# But the principle still applies: design functions to accept narrow protocols.
+# Instead of def process(worker: Worker), use def process(worker: Workable)
+# This means process() works with both HumanWorker and RobotWorker
+# and any future class that has a work() method.
+
+# PRACTICAL APPLICATION: keep interfaces focused
+# BAD: def save(storage: DatabaseAndFileAndCacheStorage): ...
+# GOOD: def save(storage: Saveable): ...
+# BAD: def report(generator: HTMLAndPDFAndExcelGenerator): ...
+# GOOD: def report(generator: ReportGenerator): ...
+\`\`\``
   },
   {
     id: "15-6",
     number: "15.6",
     title: "Single Responsibility: More Than One Reason to Change",
-    content: `The **Single Responsibility Principle (SRP)** is often misunderstood as "a class should do only one thing." If that were true, we would have thousands of one-method classes. Uncle Bob's more precise definition is: **"A module should have one, and only one, reason to change."**
+    content: `\`\`\`python
+# DEPENDENCY INVERSION PRINCIPLE:
+# High-level modules should not depend on low-level modules.
+# Both should depend on abstractions.
+# Abstractions should not depend on details.
+# Details should depend on abstractions.
 
-A "reason to change" is usually a **person** or a **business stakeholder**.
+# VIOLATION: high-level OrderService depends directly on low-level MySQLDatabase
+import mysql.connector
 
-## Identifying Violations
-Imagine an \`Employee\` class that has three methods:
-1. \`calculatePay()\` (defined by the Accounting Dept)
-2. \`reportHours()\` (defined by Human Resources)
-3. \`save()\` (defined by the Database Admins)
+class OrderService: # HIGH-LEVEL: business logic
+def __init__(self):
+# Directly creates low-level dependency
+\`\`\`
 
-This class violates SRP because it brings together three different stakeholders. If the Accounting department changes how overtime is calculated, you have to recompile and redeploy the code that HR uses to track attendance. If the database schema changes, you risk breaking the pay calculation logic.
+self.db = mysql.connector.connect(
 
-## The Solution: Split the Actors
-Instead of one giant class, we split the logic into separate classes that serve different actors:
-- \`PayCalculator\`: Pure business logic for accounting.
-- \`HourReporter\`: Logic for reporting.
-- \`EmployeeRepository\`: Persistence logic.
+\`\`\`python
+host='localhost', user='root', password='secret', database='orders'
+\`\`\`
 
-## Why it Matters
-SRP reduces **coupling**. When classes are tightly packed with unrelated responsibilities, they become "magnets" for change. Every new feature request touches the same three files, leading to merge conflicts and regression bugs.
+)
 
-**Key Insight:** SRP is about **Cohesion**. If the methods in your class don't use the same instance variables, they probably don't belong together. They are separate responsibilities living in the same house.`
+
+\`\`\`python
+def get_pending_orders(self) -> list:
+cursor = self.db.cursor()
+\`\`\`
+
+cursor.execute('SELECT * FROM orders WHERE status = "pending"')
+
+\`\`\`python
+return cursor.fetchall()
+
+# Problems:
+# Cannot test without a real MySQL database
+# Cannot switch to PostgreSQL without modifying OrderService
+# Cannot use a test double (mock)
+
+# CORRECT: depend on abstraction, inject the detail
+from abc import ABC, abstractmethod
+from typing import List
+from dataclasses import dataclass
+
+@dataclass
+class Order:
+\`\`\`
+
+id: int; customer_id: int; status: str; total_cents: int
+
+
+\`\`\`python
+class OrderRepository(ABC): # ABSTRACTION
+@abstractmethod
+def get_pending(self) -> List[Order]: pass
+
+@abstractmethod
+def save(self, order: Order) -> Order: pass
+
+class MySQLOrderRepository(OrderRepository): # LOW-LEVEL detail
+def __init__(self, connection):
+\`\`\`
+
+self.conn = connection
+
+\`\`\`python
+def get_pending(self) -> List[Order]:
+cursor = self.conn.cursor()
+\`\`\`
+
+cursor.execute('SELECT * FROM orders WHERE status = "pending"')
+
+\`\`\`python
+return [Order(*row) for row in cursor.fetchall()]
+def save(self, order: Order) -> Order: ...
+
+class InMemoryOrderRepository(OrderRepository): # For testing
+def __init__(self):
+\`\`\`
+
+self.orders: List[Order] = []
+
+\`\`\`python
+def get_pending(self) -> List[Order]:
+return [o for o in self.orders if o.status == 'pending']
+def save(self, order: Order) -> Order:
+\`\`\`
+
+self.orders.append(order); return order
+
+
+\`\`\`python
+class OrderService: # HIGH-LEVEL: depends on abstraction
+def __init__(self, order_repo: OrderRepository): # INJECTED
+\`\`\`
+
+self.orders = order_repo
+
+
+\`\`\`python
+def process_pending_orders(self) -> int:
+pending = self.orders.get_pending()
+for order in pending:
+\`\`\`
+
+self._process(order)
+
+\`\`\`python
+return len(pending)
+
+def _process(self, order: Order) -> None: ...
+
+# Testing: inject InMemoryOrderRepository — zero real database
+# Production: inject MySQLOrderRepository or PostgreSQLOrderRepository
+# Adding DynamoDB: add DynamoDBOrderRepository, zero changes to OrderService
+\`\`\``
   },
   {
     id: "15-7",
     number: "15.7",
     title: "Open-Closed: Extension Without Modification",
-    content: `The **Open-Closed Principle (OCP)** states: **"Software entities (classes, modules, functions, etc.) should be open for extension, but closed for modification."**
+    content: `\`\`\`python
+# DRY: Don't Repeat Yourself
+# Every piece of knowledge must have a single, authoritative representation.
+# Violation: duplicated logic creates multiple update points and divergence.
 
-This sounds like a paradox. How can you change the behavior of a module without changing its source code? The answer is **Polymorphism**.
+# VIOLATION: discount logic in 3 places
+# In OrderController:
+discount = order.total * 0.10 if order.customer.is_premium else 0
+# In InvoiceGenerator:
+discount = invoice.subtotal * 0.10 if customer.tier == 'premium' else 0
+# In ReportBuilder:
+discount = row['total'] * 0.1 if row['customer_premium'] else 0
 
-## The Anti-Pattern: Switch Statements
-If you have a function that draws different shapes:
-\`\`\`typescript
-function draw(shape: any) {
-  if (shape.type === 'circle') {
-    // draw circle logic
-  } else if (shape.type === 'square') {
-    // draw square logic
-  }
-}
+# Three places. Three places to update when the discount changes to 15%.
+# Three places where the logic can drift apart and become inconsistent.
+
+# CORRECT: single authoritative source
+PREMIUM_DISCOUNT_RATE = 0.10
+
+def calculate_premium_discount(subtotal: float, is_premium: bool) -> float:
+return subtotal * PREMIUM_DISCOUNT_RATE if is_premium else 0.0
+
+# All three callers use calculate_premium_discount()
+# Changing the rate: one place. Testing: one function.
+
+# DRY WARNING: DRY is about KNOWLEDGE, not code
+# Two functions can look similar but represent different knowledge.
+# Do NOT extract just because code looks similar.
+# Extract when they mean the same thing and would change together.
+
+# YAGNI: You Aren't Gonna Need It
+# Do not build features until they are actually needed.
+# Every piece of code you write must be maintained forever.
+# 'Just in case' code becomes dead weight.
+
+# VIOLATION: building for imagined future requirements
+class UserService:
+def create_user(self, data): ...
+def delete_user(self, user_id): ...
+def export_to_xml(self): ... # nobody asked for this
+def sync_with_ldap(self): ... # 'we might need it someday'
+def generate_audit_trail(self): ... # 'just in case compliance asks'
+def batch_import_from_csv(self): ...
+
+# CORRECT: build exactly what is needed today
+class UserService:
+def create_user(self, data): ...
+def delete_user(self, user_id): ...
+# Add export_to_xml when a real requirement exists
+
+# KISS: Keep It Simple, Stupid
+# Prefer the simpler solution. Complexity is a cost.
+
+# VIOLATION: over-engineered for a simple need
+class DataProcessingPipelineOrchestrationFrameworkFactory:
+def create_pipeline(self, config): ...
+def register_stage(self, stage_factory): ...
+def build_dag(self): ...
+# Needed for: transform a list of user records to CSV
+
+# CORRECT: simple solution for simple need
+def users_to_csv(users: list) -> str:
+import csv, io
+output = io.StringIO()
+writer = csv.DictWriter(output, fieldnames=['id', 'name', 'email'])
 \`\`\`
-Every time you add a new shape (e.g., 'Triangle'), you must **modify** the \`draw\` function. This violates OCP.
 
-## The OCP Way: Abstraction
-We define an interface and let the shapes implement their own logic:
-\`\`\`typescript
-interface Shape {
-  draw(): void;
-}
+writer.writeheader()
+writer.writerows(users)
 
-class Circle implements Shape {
-  draw() { /* ... */ }
-}
-
-function draw(shape: Shape) {
-  shape.draw();
-}
-\`\`\`
-Now, to add a \`Triangle\`, we simply create a new class. We don't touch the \`draw\` function. The system is **open for extension** (we added a triangle) but **closed for modification** (we didn't change the existing \`draw\` logic).
-
-## Why OCP?
-Modification is dangerous. When you change existing code, you risk breaking everything that relies on it. Extension is safe. You are adding new code that nothing else uses yet. 
-
-OCP is the heart of **Plugin Architectures**. Systems like VS Code or the Linux Kernel are massive examples of OCP; you can add immense functionality via extensions without changing a single line of the core engine.`
+\`\`\`python
+return output.getvalue()
+\`\`\``
   },
   {
     id: "15-8",
     number: "15.8",
     title: "Liskov Substitution: Behavioral Subtyping",
-    content: `The **Liskov Substitution Principle (LSP)**, named after Barbara Liskov, is the most mathematically rigorous of the SOLID principles. It states: **"Functions that use pointers or references to base classes must be able to use objects of derived classes without knowing it."**
+    content: `SOLID AUDIT: Take any class in a codebase you own. Audit it against all 5 SOLID principles. For each principle: does it comply? If not, how does violating it increase the cost of change? Refactor the most egregious violation.
+OCP IN PRACTICE: Find a function with 3+ if/elif branches switching on a type. Refactor using the Strategy pattern (abstract base class + subclass per type). Add a new type without touching existing code.
+DIP EXERCISE: Take a class that creates its own database connection. Apply dependency injection. Create an in-memory test double. Write 5 tests that run with zero real database.
+DRY AUDIT: Find 3 pieces of duplicated logic in any codebase. For each: extract to a single authoritative function. Count how many callers now use the shared version. Write tests for the shared function.
+DESIGN PRINCIPLES REVIEW: Read the SOLID principles paper by Robert C. Martin. Find one real production bug from your experience or from a public post-mortem that was caused by violating one of these principles. Explain which principle was violated, how it led to the bug, and how proper application would have prevented it.
+Chapter 15 — Ten Design Principle Truths
+SRP: a class has one reason to change. Multiple sources of change in one class means changes to one concern risk breaking others.
+OCP: add behavior by adding new code, not changing existing code. New classes extend functionality without touching tested, deployed code.
+LSP: subclasses must be fully substitutable for their parent. If substitution breaks behavior, the inheritance hierarchy is wrong.
+ISP: clients should not depend on methods they do not use. Split fat interfaces into focused ones. Depend on the narrowest interface needed.
+DIP: high-level modules depend on abstractions, not concrete implementations. Inject dependencies — do not create them.
+DRY: every piece of knowledge has one authoritative representation. Duplication creates multiple update points and guarantees eventual inconsistency.
+DRY is about knowledge, not code similarity. Two similar-looking functions representing different knowledge should NOT be merged.
+YAGNI: build what is needed today. Every line of code you write must be maintained forever. Speculative features are technical debt from day one.
+KISS: prefer the simpler solution. Complexity is a cost paid on every read, every debug, every modification. Add complexity only when necessary.
+Principles are tools for managing change cost, not rules to follow religiously. Apply them where they reduce the cost of the most likely changes.
 
-In simpler terms: A subclass should not just *look* like its parent; it must *behave* like it.
+CHAPTER 16
+DESIGN PATTERNS: THE COMPLETE CATALOG
+The 23 Gang of Four Patterns Plus Modern Additions — Every Pattern You Will Ever Need
 
-## The Classic Violation: Square vs. Rectangle
-In geometry, a Square is a Rectangle. But in software:
-\`\`\`python
-class Rectangle:
-    def set_width(self, w): self.width = w
-    def set_height(self, h): self.height = h
-
-class Square(Rectangle):
-    def set_width(self, w):
-        self.width = w
-        self.height = w  # Violation!
-    def set_height(self, h):
-        self.width = h
-        self.height = h
-\`\`\`
-If a function expects a \`Rectangle\` and sets the width to 10 and height to 5, it expects an area of 50. If you pass a \`Square\`, the width change also changes the height, and the area becomes 25. The code "breaks" because the subclass violated the **behavioral expectations** of the base class.
-
-## How to Follow LSP
-1. **Preconditions cannot be strengthened:** A subclass shouldn't require more than its parent (e.g., "I only accept positive numbers" when the parent accepts all).
-2. **Postconditions cannot be weakened:** A subclass must do at least as much as the parent (e.g., "I might not actually save the data" when the parent promised to save).
-3. **Invariants must be preserved:** If the parent promises "The ID will never be null," the subclass must keep that promise.
-
-LSP is about **Contracts**. Inheritance is not just about sharing code; it's about promising that the new thing is a valid substitute for the old thing.`
+"Each pattern describes a problem which occurs over and over again in our environment, and then describes the core of the solution to that problem." — Christopher Alexander — the architect whose work inspired the Gang of Four`
   },
   {
     id: "15-9",
